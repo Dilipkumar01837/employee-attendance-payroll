@@ -150,3 +150,31 @@ def employee_delete(request, pk):
         "employees/employee_confirm_delete.html",
         {"employee": employee},
     )
+
+
+@user_passes_test(is_admin)
+def employee_deactivate(request, pk):
+    employee = get_object_or_404(Employee, pk=pk)
+
+    if request.method == "POST":
+        employee.is_active = False
+        employee.save()
+
+        return redirect("employee_list")
+
+    return render(
+        request,
+        "employees/employee_detail.html",
+        {"employee": employee},
+    )
+def employee_profile(request):
+    employee = get_object_or_404(
+        Employee.objects.select_related("user"),
+        user=request.user,
+    )
+
+    return render(
+        request,
+        "employees/employee_profile.html",
+        {"employee": employee},
+    )

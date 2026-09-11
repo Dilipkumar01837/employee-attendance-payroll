@@ -32,11 +32,25 @@
                 <td>{{ employee.designation }}</td>
                 <td>
                     <a href="{% url 'employee_detail' employee.pk %}">View</a>
-                    |
-                    <a href="{% url 'employee_update' employee.pk %}">Edit</a>
-                    |
-                    <a href="{% url 'employee_delete' employee.pk %}">Delete</a>
-                </td>
+|
+<a href="{% url 'employee_update' employee.pk %}">Edit</a>
+|
+<a href="{% url 'employee_delete' employee.pk %}">Delete</a>
+
+{% if employee.is_active %}
+<form method="post"
+      action="{% url 'employee_deactivate' employee.pk %}"
+      style="display:inline;">
+    {% csrf_token %}
+    <button type="submit"
+            onclick="return confirm('Deactivate this employee?');">
+        Deactivate
+    </button>
+</form>
+{% else %}
+    <strong>Inactive</strong>
+{% endif %}                
+</td>
             </tr>
             {% endfor %}
         </table>

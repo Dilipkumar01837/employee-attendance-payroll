@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Profile</title>
+</head>
+<body>
+
+<h1>My Employee Profile</h1>
+
+<p><strong>Employee ID:</strong> {{ employee.employee_id }}</p>
+<p><strong>Name:</strong> {{ employee.user.get_full_name }}</p>
+<p><strong>Username:</strong> {{ employee.user.username }}</p>
+<p><strong>Email:</strong> {{ employee.user.email }}</p>
+<p><strong>Department:</strong> {{ employee.department }}</p>
+<p><strong>Designation:</strong> {{ employee.designation }}</p>
+<p><strong>Date of Joining:</strong> {{ employee.date_of_joining }}</p>
+<p><strong>Gender:</strong> {{ employee.gender }}</p>
+<p><strong>Date of Birth:</strong> {{ employee.date_of_birth }}</p>
+<p><strong>Address:</strong> {{ employee.address }}</p>
+<p><strong>Emergency Contact:</strong> {{ employee.emergency_contact }}</p>
+
+<p>
+    <strong>Status:</strong>
+    {% if employee.is_active %}
+        Active
+    {% else %}
+        Inactive
+    {% endif %}
+</p>
+
+<a href="{% url 'employee_list' %}">Back to Employees</a>
+
+</body>
+</html>
