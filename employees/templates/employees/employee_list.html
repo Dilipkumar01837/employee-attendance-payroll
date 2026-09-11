@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Employees</title>
+</head>
+<body>
+    <h1>Employee Management</h1>
+
+    {% if user.is_authenticated %}
+        <p>Logged in as: {{ user.username }}</p>
+    {% endif %}
+
+    <a href="{% url 'employee_create' %}">Add Employee</a>
+
+    <hr>
+
+    {% if employees %}
+        <table border="1" cellpadding="8">
+            <tr>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Department</th>
+                <th>Designation</th>
+                <th>Actions</th>
+            </tr>
+
+            {% for employee in employees %}
+            <tr>
+                <td>{{ employee.employee_id }}</td>
+                <td>{{ employee.user.get_full_name }}</td>
+                <td>{{ employee.department }}</td>
+                <td>{{ employee.designation }}</td>
+                <td>
+                    <a href="{% url 'employee_detail' employee.pk %}">View</a>
+                    |
+                    <a href="{% url 'employee_update' employee.pk %}">Edit</a>
+                    |
+                    <a href="{% url 'employee_delete' employee.pk %}">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    {% else %}
+        <p>No employees found.</p>
+    {% endif %}
+</body>
+</html>

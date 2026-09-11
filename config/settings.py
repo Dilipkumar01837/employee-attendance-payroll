@@ -147,3 +147,6 @@ MAILERS = {
 }
 DEFAULT_AUTO_FIELD = "django_mongodb_backend.fields.ObjectIdAutoField"
 AUTH_USER_MODEL = "accounts.User"
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/employees/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
