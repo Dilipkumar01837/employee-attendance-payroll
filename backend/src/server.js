@@ -8,6 +8,7 @@ require("dotenv").config({
 const connectDB = require("./config/db");
 const employeeRoutes = require("./routes/employeeRoutes");
 const authRoutes = require("./routes/authRoutes");
+const leaveRoutes = require("./routes/leaveRoutes");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -44,6 +45,7 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/employees", employeeRoutes);
+app.use("/api/leaves", leaveRoutes);
 
 connectDB()
   .then(() => {

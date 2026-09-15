@@ -5,16 +5,78 @@ import api, { TOKEN_KEY } from "./services/api";
 function App() {
   const [user, setUser] = useState(null);
   const [employees, setEmployees] = useState([]);
+  const [leaves, setLeaves] = useState([]);
   const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [view, setView] = useState("directory");
+
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
+
+  const [leaveForm, setLeaveForm] = useState({
+    employeeId: "",
+    leaveType: "Casual",
+    startDate: "",
+    endDate: "",
+    reason: "",
+  });
+
+  const [remarks, setRemarks] = useState({});
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  // ==========================================
+  // LOAD EMPLOYEES
+  // ==========================================
 
   const loadEmployees = async () => {
-    const data = await api("/api/employees");
-    setEmployees(data.data || []);
+    try {
+      const data = await api("/api/employees");
+      setEmployees(data.data || []);
+    } catch (err) {
+      setError(err.message);
+    }
   };
+
+  // ==========================================
+  // LOAD MY LEAVES
+  // ==========================================
+
+  const loadMyLeaves = async (employeeId) => {
+    if (!employeeId) return;
+
+    try {
+      const data = await api(
+        `/api/leaves/my?employeeId=${encodeURIComponent(employeeId)}`
+      );
+
+      setLeaves(data.data || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // ==========================================
+  // LOAD ALL LEAVES - HR / ADMIN
+  // ==========================================
+
+  const loadAllLeaves = async () => {
+    try {
+      const data = await api("/api/leaves");
+      setLeaves(data.data || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // ==========================================
+  // RESTORE SESSION
+  // ==========================================
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -25,7 +87,9 @@ function App() {
 
       try {
         const data = await api("/api/auth/me");
+
         setUser(data.user);
+
         await loadEmployees();
       } catch {
         localStorage.removeItem(TOKEN_KEY);
@@ -38,23 +102,46 @@ function App() {
     restoreSession();
   }, []);
 
+  // ==========================================
+  // LOGIN / REGISTER
+  // ==========================================
+
   const handleSubmit = async (event) => {
     event.preventDefault();
+
     setSubmitting(true);
     setError("");
+    setSuccess("");
 
     try {
-      const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
-      const body = mode === "login" ? form : { ...form, role: "employee" };
+      const endpoint =
+        mode === "login"
+          ? "/api/auth/login"
+          : "/api/auth/register";
+
+      const body =
+        mode === "login"
+          ? form
+          : { ...form, role: "employee" };
+
       const data = await api(endpoint, {
         method: "POST",
         body: JSON.stringify(body),
       });
 
       localStorage.setItem(TOKEN_KEY, data.token);
+
       setUser(data.user);
-      setForm({ name: "", email: "", password: "" });
+
+      setForm({
+        name: "",
+        email: "",
+        password: "",
+      });
+
       await loadEmployees();
+
+      setView("directory");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -62,27 +149,200 @@ function App() {
     }
   };
 
+  // ==========================================
+  // LOGOUT
+  // ==========================================
+
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
+
     setUser(null);
     setEmployees([]);
+    setLeaves([]);
+
     setError("");
+    setSuccess("");
+
     setMode("login");
+    setView("directory");
   };
 
+  // ==========================================
+  // APPLY LEAVE
+  // ==========================================
+
+  const handleLeaveSubmit = async (event) => {
+    event.preventDefault();
+
+    setSubmitting(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const data = await api("/api/leaves", {
+        method: "POST",
+        body: JSON.stringify(leaveForm),
+      });
+
+      setSuccess(
+        data.message || "Leave application submitted successfully."
+      );
+
+      setLeaveForm({
+        employeeId: leaveForm.employeeId,
+        leaveType: "Casual",
+        startDate: "",
+        endDate: "",
+        reason: "",
+      });
+
+      await loadMyLeaves(leaveForm.employeeId);
+
+      setView("my-leaves");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ==========================================
+  // OPEN MY LEAVE HISTORY
+  // ==========================================
+
+  const openMyLeaves = async () => {
+    setError("");
+    setSuccess("");
+
+    const employeeId =
+      leaveForm.employeeId || employees[0]?.employeeId;
+
+    if (!employeeId) {
+      setError(
+        "No employee record is available. Please contact HR/Admin."
+      );
+      return;
+    }
+
+    setLeaveForm((current) => ({
+      ...current,
+      employeeId,
+    }));
+
+    await loadMyLeaves(employeeId);
+
+    setView("my-leaves");
+  };
+
+  // ==========================================
+  // OPEN LEAVE APPLICATION
+  // ==========================================
+
+  const openApplyLeave = () => {
+    setError("");
+    setSuccess("");
+
+    const employeeId =
+      leaveForm.employeeId || employees[0]?.employeeId || "";
+
+    setLeaveForm((current) => ({
+      ...current,
+      employeeId,
+    }));
+
+    setView("apply-leave");
+  };
+
+  // ==========================================
+  // HR / ADMIN - OPEN LEAVE MANAGEMENT
+  // ==========================================
+
+  const openLeaveManagement = async () => {
+    setError("");
+    setSuccess("");
+
+    await loadAllLeaves();
+
+    setView("leave-management");
+  };
+
+  // ==========================================
+  // APPROVE LEAVE
+  // ==========================================
+
+  const handleApprove = async (leaveId) => {
+    setError("");
+    setSuccess("");
+
+    try {
+      const data = await api(`/api/leaves/${leaveId}/approve`, {
+        method: "PUT",
+        body: JSON.stringify({
+          remarks: remarks[leaveId] || "",
+        }),
+      });
+
+      setSuccess(data.message || "Leave approved successfully.");
+
+      await loadAllLeaves();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // ==========================================
+  // REJECT LEAVE
+  // ==========================================
+
+  const handleReject = async (leaveId) => {
+    setError("");
+    setSuccess("");
+
+    try {
+      const data = await api(`/api/leaves/${leaveId}/reject`, {
+        method: "PUT",
+        body: JSON.stringify({
+          remarks: remarks[leaveId] || "",
+        }),
+      });
+
+      setSuccess(data.message || "Leave rejected successfully.");
+
+      await loadAllLeaves();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // ==========================================
+  // LOADING SCREEN
+  // ==========================================
+
   if (loading) {
-    return <main className="app-shell loading-screen">Loading workspace...</main>;
+    return (
+      <main className="app-shell loading-screen">
+        Loading workspace...
+      </main>
+    );
   }
+
+  // ==========================================
+  // LOGIN / REGISTER
+  // ==========================================
 
   if (!user) {
     return (
       <main className="app-shell auth-layout">
         <section className="intro-panel">
           <p className="eyebrow">People operations</p>
+
           <h1>Keep every shift accounted for.</h1>
+
           <p className="intro-copy">
-            A focused workspace for attendance, employee records, and payroll-ready data.
+            A focused workspace for attendance, employee records,
+            leave management, and payroll-ready data.
           </p>
+
           <div className="signal-row">
             <span className="signal-dot" />
             MongoDB workspace connected
@@ -92,107 +352,663 @@ function App() {
         <section className="auth-panel">
           <div className="panel-heading">
             <p className="eyebrow">Employee portal</p>
-            <h2>{mode === "login" ? "Welcome back" : "Create your account"}</h2>
+
+            <h2>
+              {mode === "login"
+                ? "Welcome back"
+                : "Create your account"}
+            </h2>
           </div>
 
           <form onSubmit={handleSubmit}>
             {mode === "register" && (
               <label>
                 Full name
+
                 <input
                   required
                   value={form.name}
-                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      name: event.target.value,
+                    })
+                  }
                 />
               </label>
             )}
+
             <label>
               Email address
+
               <input
                 required
                 type="email"
                 value={form.email}
-                onChange={(event) => setForm({ ...form, email: event.target.value })}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    email: event.target.value,
+                  })
+                }
               />
             </label>
+
             <label>
               Password
+
               <input
                 required
                 minLength="6"
                 type="password"
                 value={form.password}
-                onChange={(event) => setForm({ ...form, password: event.target.value })}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    password: event.target.value,
+                  })
+                }
               />
             </label>
 
-            {error && <p className="form-error">{error}</p>}
-            <button className="primary-button" disabled={submitting} type="submit">
-              {submitting ? "Working..." : mode === "login" ? "Sign in" : "Register"}
+            {error && (
+              <p className="form-error">{error}</p>
+            )}
+
+            <button
+              className="primary-button"
+              disabled={submitting}
+              type="submit"
+            >
+              {submitting
+                ? "Working..."
+                : mode === "login"
+                  ? "Sign in"
+                  : "Register"}
             </button>
           </form>
 
           <button
             className="text-button"
             onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
+              setMode(
+                mode === "login"
+                  ? "register"
+                  : "login"
+              );
+
               setError("");
             }}
             type="button"
           >
-            {mode === "login" ? "Need an account? Register" : "Already registered? Sign in"}
+            {mode === "login"
+              ? "Need an account? Register"
+              : "Already registered? Sign in"}
           </button>
         </section>
       </main>
     );
   }
 
+  // ==========================================
+  // AUTHENTICATED WORKSPACE
+  // ==========================================
+
   return (
     <main className="app-shell dashboard">
+
+      {/* TOP BAR */}
       <header className="topbar">
         <div>
-          <p className="eyebrow">Employee portal</p>
+          <p className="eyebrow">
+            {user.role === "employee"
+              ? "Employee portal"
+              : "Management portal"}
+          </p>
+
           <h1>Attendance workspace</h1>
         </div>
-        <button className="text-button" onClick={logout} type="button">Sign out</button>
+
+        <button
+          className="text-button"
+          onClick={logout}
+          type="button"
+        >
+          Sign out
+        </button>
       </header>
 
+
+      {/* NAVIGATION */}
+      <nav className="workspace-nav">
+        <button
+          className={
+            view === "directory"
+              ? "nav-button active"
+              : "nav-button"
+          }
+          onClick={() => {
+            setError("");
+            setSuccess("");
+            setView("directory");
+          }}
+        >
+          Employees
+        </button>
+
+        {user.role === "employee" && (
+          <>
+            <button
+              className={
+                view === "apply-leave"
+                  ? "nav-button active"
+                  : "nav-button"
+              }
+              onClick={openApplyLeave}
+            >
+              Apply Leave
+            </button>
+
+            <button
+              className={
+                view === "my-leaves"
+                  ? "nav-button active"
+                  : "nav-button"
+              }
+              onClick={openMyLeaves}
+            >
+              My Leave History
+            </button>
+          </>
+        )}
+
+        {(user.role === "hr" ||
+          user.role === "admin") && (
+          <button
+            className={
+              view === "leave-management"
+                ? "nav-button active"
+                : "nav-button"
+            }
+            onClick={openLeaveManagement}
+          >
+            Leave Management
+          </button>
+        )}
+      </nav>
+
+
+      {/* WELCOME BAND */}
       <section className="welcome-band">
         <div>
-          <p className="eyebrow">Signed in as {user.role}</p>
+          <p className="eyebrow">
+            Signed in as {user.role}
+          </p>
+
           <h2>{user.name}</h2>
+
           <p>{user.email}</p>
         </div>
+
         <div className="metric">
           <strong>{employees.length}</strong>
           <span>Employee records</span>
         </div>
       </section>
 
-      <section className="records-section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Directory</p>
-            <h2>Employee records</h2>
-          </div>
-          <button className="secondary-button" onClick={loadEmployees} type="button">Refresh</button>
+
+      {/* GLOBAL MESSAGES */}
+      {error && (
+        <div className="message error-message">
+          {error}
         </div>
-        {employees.length ? (
-          <div className="record-list">
-            {employees.map((employee) => (
-              <article className="record" key={employee._id}>
-                <div>
-                  <strong>{employee.name}</strong>
-                  <span>{employee.designation} / {employee.department}</span>
-                </div>
-                <span className="record-id">{employee.employeeId}</span>
-              </article>
-            ))}
+      )}
+
+      {success && (
+        <div className="message success-message">
+          {success}
+        </div>
+      )}
+
+
+      {/* ======================================
+          EMPLOYEE DIRECTORY
+      ====================================== */}
+
+      {view === "directory" && (
+        <section className="records-section">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Directory</p>
+
+              <h2>Employee records</h2>
+            </div>
+
+            <button
+              className="secondary-button"
+              onClick={loadEmployees}
+              type="button"
+            >
+              Refresh
+            </button>
           </div>
-        ) : (
-          <div className="empty-state">No employee records have been added yet.</div>
-        )}
-      </section>
+
+          {employees.length ? (
+            <div className="record-list">
+              {employees.map((employee) => (
+                <article
+                  className="record"
+                  key={employee._id}
+                >
+                  <div>
+                    <strong>{employee.name}</strong>
+
+                    <span>
+                      {employee.designation} /{" "}
+                      {employee.department}
+                    </span>
+                  </div>
+
+                  <span className="record-id">
+                    {employee.employeeId}
+                  </span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              No employee records have been added yet.
+            </div>
+          )}
+        </section>
+      )}
+
+
+      {/* ======================================
+          APPLY LEAVE
+      ====================================== */}
+
+      {view === "apply-leave" && (
+        <section className="records-section">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Leave management</p>
+
+              <h2>Apply for leave</h2>
+            </div>
+          </div>
+
+          <div className="form-card">
+            <form onSubmit={handleLeaveSubmit}>
+
+              <label>
+                Employee ID
+
+                <select
+                  required
+                  value={leaveForm.employeeId}
+                  onChange={(event) =>
+                    setLeaveForm({
+                      ...leaveForm,
+                      employeeId: event.target.value,
+                    })
+                  }
+                >
+                  <option value="">
+                    Select employee
+                  </option>
+
+                  {employees.map((employee) => (
+                    <option
+                      key={employee._id}
+                      value={employee.employeeId}
+                    >
+                      {employee.employeeId} —{" "}
+                      {employee.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+
+              <label>
+                Leave type
+
+                <select
+                  required
+                  value={leaveForm.leaveType}
+                  onChange={(event) =>
+                    setLeaveForm({
+                      ...leaveForm,
+                      leaveType: event.target.value,
+                    })
+                  }
+                >
+                  <option value="Casual">
+                    Casual
+                  </option>
+
+                  <option value="Sick">
+                    Sick
+                  </option>
+
+                  <option value="Earned">
+                    Earned
+                  </option>
+
+                  <option value="Other">
+                    Other
+                  </option>
+                </select>
+              </label>
+
+
+              <div className="form-row">
+                <label>
+                  Start date
+
+                  <input
+                    required
+                    type="date"
+                    value={leaveForm.startDate}
+                    onChange={(event) =>
+                      setLeaveForm({
+                        ...leaveForm,
+                        startDate:
+                          event.target.value,
+                      })
+                    }
+                  />
+                </label>
+
+                <label>
+                  End date
+
+                  <input
+                    required
+                    type="date"
+                    value={leaveForm.endDate}
+                    min={leaveForm.startDate || undefined}
+                    onChange={(event) =>
+                      setLeaveForm({
+                        ...leaveForm,
+                        endDate:
+                          event.target.value,
+                      })
+                    }
+                  />
+                </label>
+              </div>
+
+
+              <label>
+                Reason
+
+                <textarea
+                  required
+                  rows="5"
+                  value={leaveForm.reason}
+                  onChange={(event) =>
+                    setLeaveForm({
+                      ...leaveForm,
+                      reason: event.target.value,
+                    })
+                  }
+                  placeholder="Enter the reason for your leave"
+                />
+              </label>
+
+
+              <button
+                className="primary-button"
+                disabled={submitting}
+                type="submit"
+              >
+                {submitting
+                  ? "Submitting..."
+                  : "Submit Leave Application"}
+              </button>
+
+            </form>
+          </div>
+        </section>
+      )}
+
+
+      {/* ======================================
+          MY LEAVE HISTORY
+      ====================================== */}
+
+      {view === "my-leaves" && (
+        <section className="records-section">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">
+                Leave management
+              </p>
+
+              <h2>My leave history</h2>
+            </div>
+
+            <button
+              className="secondary-button"
+              onClick={openMyLeaves}
+              type="button"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {leaves.length ? (
+            <div className="leave-list">
+              {leaves.map((leave) => (
+                <article
+                  className="leave-card"
+                  key={leave._id}
+                >
+                  <div className="leave-card-header">
+                    <div>
+                      <strong>
+                        {leave.leaveType} Leave
+                      </strong>
+
+                      <span>
+                        {new Date(
+                          leave.startDate
+                        ).toLocaleDateString()}{" "}
+                        —{" "}
+                        {new Date(
+                          leave.endDate
+                        ).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <span
+                      className={`status-badge status-${leave.status.toLowerCase()}`}
+                    >
+                      {leave.status}
+                    </span>
+                  </div>
+
+                  <p className="leave-reason">
+                    {leave.reason}
+                  </p>
+
+                  {leave.remarks && (
+                    <div className="remarks">
+                      <strong>
+                        HR/Admin remarks
+                      </strong>
+
+                      <p>{leave.remarks}</p>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              You have not submitted any leave
+              applications yet.
+            </div>
+          )}
+        </section>
+      )}
+
+
+      {/* ======================================
+          HR / ADMIN LEAVE MANAGEMENT
+      ====================================== */}
+
+      {view === "leave-management" && (
+        <section className="records-section">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">
+                Leave management
+              </p>
+
+              <h2>Leave requests</h2>
+            </div>
+
+            <button
+              className="secondary-button"
+              onClick={loadAllLeaves}
+              type="button"
+            >
+              Refresh
+            </button>
+          </div>
+
+
+          {leaves.length ? (
+            <div className="leave-list">
+              {leaves.map((leave) => (
+                <article
+                  className="leave-card"
+                  key={leave._id}
+                >
+
+                  <div className="leave-card-header">
+                    <div>
+                      <strong>
+                        {leave.employeeId}
+                      </strong>
+
+                      <span>
+                        {leave.leaveType} Leave
+                      </span>
+                    </div>
+
+                    <span
+                      className={`status-badge status-${leave.status.toLowerCase()}`}
+                    >
+                      {leave.status}
+                    </span>
+                  </div>
+
+
+                  <div className="leave-details">
+                    <div>
+                      <span className="detail-label">
+                        Dates
+                      </span>
+
+                      <strong>
+                        {new Date(
+                          leave.startDate
+                        ).toLocaleDateString()}{" "}
+                        —{" "}
+                        {new Date(
+                          leave.endDate
+                        ).toLocaleDateString()}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span className="detail-label">
+                        Reason
+                      </span>
+
+                      <strong>
+                        {leave.reason}
+                      </strong>
+                    </div>
+                  </div>
+
+
+                  {leave.status === "Pending" ? (
+                    <div className="approval-area">
+
+                      <label>
+                        Remarks
+
+                        <textarea
+                          rows="3"
+                          value={
+                            remarks[leave._id] || ""
+                          }
+                          onChange={(event) =>
+                            setRemarks({
+                              ...remarks,
+                              [leave._id]:
+                                event.target.value,
+                            })
+                          }
+                          placeholder="Optional approval/rejection remarks"
+                        />
+                      </label>
+
+                      <div className="action-row">
+                        <button
+                          className="approve-button"
+                          onClick={() =>
+                            handleApprove(
+                              leave._id
+                            )
+                          }
+                          type="button"
+                        >
+                          Approve
+                        </button>
+
+                        <button
+                          className="reject-button"
+                          onClick={() =>
+                            handleReject(
+                              leave._id
+                            )
+                          }
+                          type="button"
+                        >
+                          Reject
+                        </button>
+                      </div>
+
+                    </div>
+                  ) : (
+                    leave.remarks && (
+                      <div className="remarks">
+                        <strong>
+                          Remarks
+                        </strong>
+
+                        <p>{leave.remarks}</p>
+                      </div>
+                    )
+                  )}
+
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              No leave requests have been submitted.
+            </div>
+          )}
+        </section>
+      )}
+
     </main>
   );
 }
