@@ -614,7 +614,12 @@ function App() {
 
 
       {view === "dashboard" && (
-        <Dashboard employees={employees} leaves={leaves} />
+        <Dashboard
+          user={user}
+          employees={employees}
+          leaves={leaves}
+          onOpenApplyLeave={openApplyLeave}
+        />
       )}
 
 
