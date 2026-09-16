@@ -1,4 +1,4 @@
-import { Bar, Doughnut } from 'react-chartjs-2';
+import { Doughnut } from 'react-chartjs-2';
 import PageHeader from '../components/PageHeader';
 import {
   Chart as ChartJS,
@@ -19,21 +19,37 @@ ChartJS.register(
   Legend
 );
 
-function Dashboard() {
-  const attendanceData = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+function Dashboard({ employees = [], leaves = [] }) {
+  const activeEmployees = employees.filter(
+    (employee) => employee.isActive !== false
+  );
+  const today = new Date();
+  const employeesOnLeaveToday = new Set(
+    leaves
+      .filter((leave) => {
+        const startDate = new Date(leave.startDate);
+        const endDate = new Date(leave.endDate);
+
+        return (
+          leave.status === 'Approved' &&
+          startDate <= today &&
+          endDate >= today
+        );
+      })
+      .map((leave) => leave.employeeId)
+  );
+  const leaveStatusCounts = ['Pending', 'Approved', 'Rejected'].map(
+    (status) => leaves.filter((leave) => leave.status === status).length
+  );
+  const hasLeaveData = leaves.length > 0;
+
+  const leaveStatusData = {
+    labels: ['Pending', 'Approved', 'Rejected'],
     datasets: [
       {
-        label: 'Present',
-        data: [168, 172, 165, 178, 170, 120],
-        backgroundColor: '#1f7a8c',
-        borderRadius: 6,
-      },
-      {
-        label: 'Absent',
-        data: [12, 8, 15, 6, 10, 4],
-        backgroundColor: '#e59866',
-        borderRadius: 6,
+        data: leaveStatusCounts,
+        backgroundColor: ['#e59866', '#1f7a8c', '#8e9aaf'],
+        borderWidth: 0,
       },
     ],
   };
@@ -48,17 +64,6 @@ function Dashboard() {
     },
   };
 
-  const statusData = {
-    labels: ['Present', 'Absent', 'On Leave'],
-    datasets: [
-      {
-        data: [172, 10, 8],
-        backgroundColor: ['#1f7a8c', '#e59866', '#8e9aaf'],
-        borderWidth: 0,
-      },
-    ],
-  };
-
   return (
     <div className="dashboard-page">
       <PageHeader
@@ -68,10 +73,26 @@ function Dashboard() {
 />
 
       <div className="row g-4 mb-4">
-        <KpiCard title="Total Employees" value="190" detail="+8 this month" />
-        <KpiCard title="Present Today" value="172" detail="90.5% attendance" />
-        <KpiCard title="Absent Today" value="10" detail="5.3% of employees" />
-        <KpiCard title="Employees on Leave" value="8" detail="4.2% of employees" />
+        <KpiCard
+          title="Total Employees"
+          value={activeEmployees.length}
+          detail="Active employee records"
+        />
+        <KpiCard
+          title="Present Today"
+          value="N/A"
+          detail="No attendance records"
+        />
+        <KpiCard
+          title="Absent Today"
+          value="N/A"
+          detail="No attendance records"
+        />
+        <KpiCard
+          title="Employees on Leave"
+          value={employeesOnLeaveToday.size}
+          detail="Approved leave records"
+        />
       </div>
 
       <div className="row g-4">
@@ -85,8 +106,8 @@ function Dashboard() {
               <span className="period-label">This Week</span>
             </div>
 
-            <div className="chart-area">
-              <Bar data={attendanceData} options={attendanceOptions} />
+            <div className="chart-area empty-chart">
+              No attendance records available.
             </div>
           </div>
         </div>
@@ -95,13 +116,17 @@ function Dashboard() {
           <div className="dashboard-card chart-card">
             <div className="card-heading">
               <div>
-                <h5>Today’s Attendance</h5>
-                <p>Current employee status</p>
+                <h5>Leave Requests</h5>
+                <p>Status breakdown from the database</p>
               </div>
             </div>
 
             <div className="donut-area">
-              <Doughnut data={statusData} options={attendanceOptions} />
+              {hasLeaveData ? (
+                <Doughnut data={leaveStatusData} options={attendanceOptions} />
+              ) : (
+                <div className="empty-chart">No leave records available.</div>
+              )}
             </div>
           </div>
         </div>
@@ -111,22 +136,22 @@ function Dashboard() {
         <div className="card-heading">
           <div>
             <h5>Payroll Overview</h5>
-            <p>Monthly payroll summary</p>
+            <p>Payroll records from the database</p>
           </div>
         </div>
 
         <div className="payroll-summary">
           <div>
             <span>Total Payroll</span>
-            <strong>₹12,45,000</strong>
+            <strong>N/A</strong>
           </div>
           <div>
             <span>Processed</span>
-            <strong className="success-text">₹10,20,000</strong>
+            <strong className="success-text">N/A</strong>
           </div>
           <div>
             <span>Pending</span>
-            <strong className="warning-text">₹2,25,000</strong>
+            <strong className="warning-text">No records</strong>
           </div>
         </div>
       </div>

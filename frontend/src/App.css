@@ -401,6 +401,14 @@ button:disabled {
   margin-top: 20px;
 }
 
+.empty-chart {
+  display: grid;
+  place-items: center;
+  border: 1px dashed #cbd7cc;
+  color: #66746a;
+  font-size: 0.9rem;
+}
+
 .payroll-summary {
   margin-top: 22px;
 }

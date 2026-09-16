@@ -38,7 +38,9 @@ function App() {
   const loadEmployees = async () => {
     try {
       const data = await api("/api/employees");
-      setEmployees(data.data || []);
+      const loadedEmployees = data.data || [];
+      setEmployees(loadedEmployees);
+      return loadedEmployees;
     } catch (err) {
       setError(err.message);
     }
@@ -91,7 +93,19 @@ function App() {
 
         setUser(data.user);
 
-        await loadEmployees();
+        const loadedEmployees = await loadEmployees();
+
+        if (data.user.role === "admin" || data.user.role === "hr") {
+          await loadAllLeaves();
+        } else {
+          const employee = loadedEmployees.find(
+            (record) => record.email === data.user.email
+          );
+
+          if (employee) {
+            await loadMyLeaves(employee.employeeId);
+          }
+        }
       } catch {
         localStorage.removeItem(TOKEN_KEY);
         setError("Your session has expired. Please sign in again.");
@@ -140,7 +154,19 @@ function App() {
         password: "",
       });
 
-      await loadEmployees();
+      const loadedEmployees = await loadEmployees();
+
+      if (data.user.role === "admin" || data.user.role === "hr") {
+        await loadAllLeaves();
+      } else {
+        const employee = loadedEmployees.find(
+          (record) => record.email === data.user.email
+        );
+
+        if (employee) {
+          await loadMyLeaves(employee.employeeId);
+        }
+      }
 
       setView("dashboard");
     } catch (err) {
@@ -587,7 +613,9 @@ function App() {
       )}
 
 
-      {view === "dashboard" && <Dashboard />}
+      {view === "dashboard" && (
+        <Dashboard employees={employees} leaves={leaves} />
+      )}
 
 
       {/* ======================================
