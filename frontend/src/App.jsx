@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "./App.css";
 import api, { TOKEN_KEY } from "./services/api";
 import Dashboard from "./pages/Dashboard";
+import Payroll from "./Payroll";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -569,15 +570,46 @@ function App() {
 
         {(user.role === "hr" ||
           user.role === "admin") && (
+          <>
+            <button
+              className={
+                view === "leave-management"
+                  ? "nav-button active"
+                  : "nav-button"
+              }
+              onClick={openLeaveManagement}
+            >
+              Leave Management
+            </button>
+            <button
+              className={
+                view === "payroll"
+                  ? "nav-button active"
+                  : "nav-button"
+              }
+              onClick={() => {
+                setError("");
+                setSuccess("");
+                setView("payroll");
+              }}
+            >
+              Payroll
+            </button>
+          </>
+        )}
+
+        {user.role === "employee" && (
           <button
             className={
-              view === "leave-management"
-                ? "nav-button active"
-                : "nav-button"
+              view === "payroll" ? "nav-button active" : "nav-button"
             }
-            onClick={openLeaveManagement}
+            onClick={() => {
+              setError("");
+              setSuccess("");
+              setView("payroll");
+            }}
           >
-            Leave Management
+            My Payroll
           </button>
         )}
       </nav>
@@ -624,6 +656,8 @@ function App() {
           onOpenApplyLeave={openApplyLeave}
         />
       )}
+
+      {view === "payroll" && <Payroll user={user} />}
 
 
       {/* ======================================
