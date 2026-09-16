@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import api, { TOKEN_KEY } from "./services/api";
+import Dashboard from "./pages/Dashboard";
 
 function App() {
   const [user, setUser] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [mode, setMode] = useState("login");
-  const [view, setView] = useState("directory");
+  const [view, setView] = useState("dashboard");
 
   const [form, setForm] = useState({
     name: "",
@@ -141,7 +142,7 @@ function App() {
 
       await loadEmployees();
 
-      setView("directory");
+      setView("dashboard");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -164,7 +165,7 @@ function App() {
     setSuccess("");
 
     setMode("login");
-    setView("directory");
+    setView("dashboard");
   };
 
   // ==========================================
@@ -481,6 +482,21 @@ function App() {
 
       {/* NAVIGATION */}
       <nav className="workspace-nav">
+            <button
+              className={
+                view === "dashboard"
+                  ? "nav-button active"
+                  : "nav-button"
+              }
+              onClick={() => {
+                setError("");
+                setSuccess("");
+                setView("dashboard");
+              }}
+            >
+              Dashboard
+            </button>
+
         <button
           className={
             view === "directory"
@@ -569,6 +585,9 @@ function App() {
           {success}
         </div>
       )}
+
+
+      {view === "dashboard" && <Dashboard />}
 
 
       {/* ======================================
