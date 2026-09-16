@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import api, { TOKEN_KEY } from "./services/api";
+import Payroll from "./Payroll";
 
 function App() {
   const [user, setUser] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -44,8 +49,16 @@ function App() {
     setError("");
 
     try {
-      const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
-      const body = mode === "login" ? form : { ...form, role: "employee" };
+      const endpoint =
+        mode === "login"
+          ? "/api/auth/login"
+          : "/api/auth/register";
+
+      const body =
+        mode === "login"
+          ? form
+          : { ...form, role: "employee" };
+
       const data = await api(endpoint, {
         method: "POST",
         body: JSON.stringify(body),
@@ -53,7 +66,12 @@ function App() {
 
       localStorage.setItem(TOKEN_KEY, data.token);
       setUser(data.user);
-      setForm({ name: "", email: "", password: "" });
+      setForm({
+        name: "",
+        email: "",
+        password: "",
+      });
+
       await loadEmployees();
     } catch (err) {
       setError(err.message);
@@ -71,7 +89,11 @@ function App() {
   };
 
   if (loading) {
-    return <main className="app-shell loading-screen">Loading workspace...</main>;
+    return (
+      <main className="app-shell loading-screen">
+        Loading workspace...
+      </main>
+    );
   }
 
   if (!user) {
@@ -79,10 +101,14 @@ function App() {
       <main className="app-shell auth-layout">
         <section className="intro-panel">
           <p className="eyebrow">People operations</p>
+
           <h1>Keep every shift accounted for.</h1>
+
           <p className="intro-copy">
-            A focused workspace for attendance, employee records, and payroll-ready data.
+            A focused workspace for attendance, employee records,
+            and payroll-ready data.
           </p>
+
           <div className="signal-row">
             <span className="signal-dot" />
             MongoDB workspace connected
@@ -92,7 +118,12 @@ function App() {
         <section className="auth-panel">
           <div className="panel-heading">
             <p className="eyebrow">Employee portal</p>
-            <h2>{mode === "login" ? "Welcome back" : "Create your account"}</h2>
+
+            <h2>
+              {mode === "login"
+                ? "Welcome back"
+                : "Create your account"}
+            </h2>
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -102,19 +133,31 @@ function App() {
                 <input
                   required
                   value={form.name}
-                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      name: event.target.value,
+                    })
+                  }
                 />
               </label>
             )}
+
             <label>
               Email address
               <input
                 required
                 type="email"
                 value={form.email}
-                onChange={(event) => setForm({ ...form, email: event.target.value })}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    email: event.target.value,
+                  })
+                }
               />
             </label>
+
             <label>
               Password
               <input
@@ -122,25 +165,45 @@ function App() {
                 minLength="6"
                 type="password"
                 value={form.password}
-                onChange={(event) => setForm({ ...form, password: event.target.value })}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    password: event.target.value,
+                  })
+                }
               />
             </label>
 
             {error && <p className="form-error">{error}</p>}
-            <button className="primary-button" disabled={submitting} type="submit">
-              {submitting ? "Working..." : mode === "login" ? "Sign in" : "Register"}
+
+            <button
+              className="primary-button"
+              disabled={submitting}
+              type="submit"
+            >
+              {submitting
+                ? "Working..."
+                : mode === "login"
+                ? "Sign in"
+                : "Register"}
             </button>
           </form>
 
           <button
             className="text-button"
             onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
+              setMode(
+                mode === "login"
+                  ? "register"
+                  : "login"
+              );
               setError("");
             }}
             type="button"
           >
-            {mode === "login" ? "Need an account? Register" : "Already registered? Sign in"}
+            {mode === "login"
+              ? "Need an account? Register"
+              : "Already registered? Sign in"}
           </button>
         </section>
       </main>
@@ -154,15 +217,27 @@ function App() {
           <p className="eyebrow">Employee portal</p>
           <h1>Attendance workspace</h1>
         </div>
-        <button className="text-button" onClick={logout} type="button">Sign out</button>
+
+        <button
+          className="text-button"
+          onClick={logout}
+          type="button"
+        >
+          Sign out
+        </button>
       </header>
 
       <section className="welcome-band">
         <div>
-          <p className="eyebrow">Signed in as {user.role}</p>
+          <p className="eyebrow">
+            Signed in as {user.role}
+          </p>
+
           <h2>{user.name}</h2>
+
           <p>{user.email}</p>
         </div>
+
         <div className="metric">
           <strong>{employees.length}</strong>
           <span>Employee records</span>
@@ -175,24 +250,47 @@ function App() {
             <p className="eyebrow">Directory</p>
             <h2>Employee records</h2>
           </div>
-          <button className="secondary-button" onClick={loadEmployees} type="button">Refresh</button>
+
+          <button
+            className="secondary-button"
+            onClick={loadEmployees}
+            type="button"
+          >
+            Refresh
+          </button>
         </div>
+
         {employees.length ? (
           <div className="record-list">
             {employees.map((employee) => (
-              <article className="record" key={employee._id}>
+              <article
+                className="record"
+                key={employee._id}
+              >
                 <div>
                   <strong>{employee.name}</strong>
-                  <span>{employee.designation} / {employee.department}</span>
+
+                  <span>
+                    {employee.designation} /{" "}
+                    {employee.department}
+                  </span>
                 </div>
-                <span className="record-id">{employee.employeeId}</span>
+
+                <span className="record-id">
+                  {employee.employeeId}
+                </span>
               </article>
             ))}
           </div>
         ) : (
-          <div className="empty-state">No employee records have been added yet.</div>
+          <div className="empty-state">
+            No employee records have been added yet.
+          </div>
         )}
       </section>
+
+      {/* Payroll Management */}
+      <Payroll user={user} />
     </main>
   );
 }

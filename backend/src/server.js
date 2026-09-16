@@ -1,57 +1,47 @@
-const express = require("express");
-const cors = require("cors");
-const path = require("path");
-require("dotenv").config({
-  path: path.resolve(__dirname, "../.env"),
-});
+const dns = require("dns");
+dns.setServers(["8.8.8.8"]);
 
-const connectDB = require("./config/db");
-const employeeRoutes = require("./routes/employeeRoutes");
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+require("dotenv").config();
+
 const authRoutes = require("./routes/authRoutes");
+const employeeRoutes = require("./routes/employeeRoutes");
+const payrollRoutes = require("./routes/payrollRoutes");
+const leaveRoutes = require("./routes/leaveRoutes");
 
 const app = express();
-const port = process.env.PORT || 5000;
-const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-
-if (!process.env.MONGO_URI) {
-  throw new Error("MONGO_URI is not configured in backend/.env");
-}
-
-if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET is not configured in backend/.env");
-}
 
 app.use(
   cors({
-    origin: [clientUrl, "http://127.0.0.1:5173"],
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
   })
 );
+
 app.use(express.json());
 
 app.get("/", (req, res) => {
   res.json({
-    message: "Employee Attendance & Payroll API is running",
-    status: "success",
-  });
-});
-
-app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    message: "API is running",
+    message: "Employee Attendance Payroll API is running",
   });
 });
 
 app.use("/api/auth", authRoutes);
 app.use("/api/employees", employeeRoutes);
+app.use("/api/payroll", payrollRoutes);
+app.use("/api/leaves", leaveRoutes);
+const PORT = process.env.PORT || 5000;
 
-connectDB()
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(() => {
-    app.listen(port, () => {
-      console.log(`Server running on http://localhost:${port}`);
+    console.log("MongoDB connected successfully");
+
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
     });
   })
   .catch((error) => {
-    console.error("Backend startup failed:", error.message);
-    process.exit(1);
+    console.error("MongoDB connection error:", error.message);
   });
