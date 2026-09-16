@@ -1,6 +1,5 @@
 import { Bar, Doughnut } from 'react-chartjs-2';
 import PageHeader from '../components/PageHeader';
-import KpiCard from '../components/KpiCard';
 import {
   Chart as ChartJS,
   CategoryScale,
