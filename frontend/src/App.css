@@ -4,15 +4,29 @@
 }
 
 .auth-layout {
+  position: relative;
+  overflow: hidden;
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
   gap: 8vw;
   align-items: center;
   padding: 7vw 10vw;
-  background: linear-gradient(125deg, #e3ebe3 0%, #f4f0e8 100%);
+  background: #f4f6f0;
+}
+
+.auth-layout::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  opacity: 0.46;
+  background-image: linear-gradient(rgba(36, 91, 60, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(36, 91, 60, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(90deg, black, transparent 76%);
 }
 
 .intro-panel {
+  position: relative;
   max-width: 620px;
 }
 
@@ -76,11 +90,13 @@ h2 {
 }
 
 .auth-panel {
+  position: relative;
+  z-index: 1;
   padding: 42px;
   border: 1px solid #d9e0d8;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 24px 70px rgba(54, 71, 58, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 22px 60px rgba(31, 55, 39, 0.14);
 }
 
 .panel-heading {
@@ -169,7 +185,7 @@ button:disabled {
 .dashboard {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 42px 6vw 72px;
+  padding: 30px 6vw 72px;
 }
 
 .topbar,
@@ -183,12 +199,112 @@ button:disabled {
 }
 
 .topbar {
-  margin-bottom: 28px;
+  margin-bottom: 26px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid #dce5dc;
 }
 
-.topbar h1 {
+.brand-lockup,
+.topbar-actions,
+.user-chip,
+.connection-status {
+  display: flex;
+  align-items: center;
+}
+
+.brand-lockup,
+.topbar-actions {
+  gap: 14px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 12px;
+  color: #fff;
+  background: #245b3c;
+  box-shadow: 0 8px 18px rgba(36, 91, 60, 0.2);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.brand-name,
+.brand-context,
+.user-chip-copy strong,
+.user-chip-copy small {
+  display: block;
+}
+
+.brand-name {
   margin: 0;
-  font-size: clamp(2.3rem, 4vw, 4rem);
+  color: #17221b;
+  font-size: 0.92rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.brand-context {
+  margin: 4px 0 0;
+  color: #718076;
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+
+.connection-status {
+  gap: 7px;
+  color: #5f7065;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.connection-status span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4d9a64;
+  box-shadow: 0 0 0 4px rgba(77, 154, 100, 0.12);
+}
+
+.user-chip {
+  gap: 9px;
+  padding-left: 14px;
+  border-left: 1px solid #dce5dc;
+}
+
+.user-avatar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  color: #245b3c;
+  background: #dcecdf;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.user-chip-copy strong {
+  max-width: 130px;
+  overflow: hidden;
+  color: #26382c;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-chip-copy small {
+  margin-top: 2px;
+  color: #7a887e;
+  font-size: 0.68rem;
+  text-transform: capitalize;
+}
+
+.sign-out-button {
+  padding-left: 14px;
+  border-left: 1px solid #dce5dc;
 }
 
 /* Navigation */
@@ -198,12 +314,15 @@ button:disabled {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 28px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid #dce5dc;
+  padding: 6px;
+  border: 1px solid #dce5dc;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.66);
 }
 
 .nav-button {
-  padding: 10px 15px;
+  padding: 10px 14px;
+  border-radius: 7px;
   color: #526158;
   background: transparent;
   border: 1px solid transparent;
@@ -217,6 +336,7 @@ button:disabled {
 .nav-button.active {
   color: #fff;
   background: #245b3c;
+  box-shadow: 0 5px 12px rgba(36, 91, 60, 0.16);
 }
 
 /* Welcome */
@@ -225,7 +345,8 @@ button:disabled {
   padding: 34px;
   border-radius: 8px;
   color: #e9f1e9;
-  background: #245b3c;
+  background: linear-gradient(115deg, #245b3c, #1f6670);
+  box-shadow: 0 16px 30px rgba(36, 91, 60, 0.14);
 }
 
 .welcome-band h2,
@@ -884,6 +1005,23 @@ button:disabled {
     margin-bottom: 22px;
   }
 
+  .topbar,
+  .topbar-actions {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .connection-status {
+    order: 3;
+    width: 100%;
+    padding-top: 4px;
+  }
+
   .welcome-band,
   .record {
     align-items: flex-start;
@@ -898,6 +1036,10 @@ button:disabled {
     overflow-x: auto;
     flex-wrap: nowrap;
     padding-bottom: 12px;
+  }
+
+  .user-chip {
+    margin-left: auto;
   }
 
   .nav-button {

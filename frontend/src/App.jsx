@@ -486,23 +486,26 @@ function App() {
 
       {/* TOP BAR */}
       <header className="topbar">
-        <div>
-          <p className="eyebrow">
-            {user.role === "employee"
-              ? "Employee portal"
-              : "Management portal"}
-          </p>
-
-          <h1>Attendance workspace</h1>
+        <div className="brand-lockup">
+          <div className="brand-mark">EA</div>
+          <div>
+            <p className="brand-name">Elaris People</p>
+            <p className="brand-context">
+              {user.role === "employee" ? "Employee portal" : "Management portal"}
+            </p>
+          </div>
         </div>
 
-        <button
-          className="text-button"
-          onClick={logout}
-          type="button"
-        >
-          Sign out
-        </button>
+        <div className="topbar-actions">
+          <span className="connection-status"><span /> Workspace connected</span>
+          <div className="user-chip">
+            <span className="user-avatar">{user.name?.slice(0, 1).toUpperCase()}</span>
+            <span className="user-chip-copy"><strong>{user.name}</strong><small>{user.role}</small></span>
+          </div>
+          <button className="text-button sign-out-button" onClick={logout} type="button">
+            Sign out
+          </button>
+        </div>
       </header>
 
 
