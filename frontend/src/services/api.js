@@ -1,25 +1,27 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-const TOKEN_KEY = "attendance_token";
+import axios from "axios";
 
-const api = async (endpoint, options = {}) => {
-  const token = localStorage.getItem(TOKEN_KEY);
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+  headers: { "Content-Type": "application/json" }
+});
 
-  const data = await response.json().catch(() => ({}));
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("employee_management_token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-  if (!response.ok) {
-    throw new Error(data.message || "API request failed");
-  }
-
-  return data;
+export const authService = {
+  login: (data) => api.post("/auth/login", data)
 };
 
-export { TOKEN_KEY };
+export const employeeService = {
+  getEmployees: (params = {}) => api.get("/employees", { params }),
+  getEmployee: (id) => api.get(`/employees/${id}`),
+  getMyProfile: () => api.get("/employees/me"),
+  createEmployee: (data) => api.post("/employees", data),
+  updateEmployee: (id, data) => api.put(`/employees/${id}`, data),
+  updateEmployeeStatus: (id, status) => api.patch(`/employees/${id}/status`, { status })
+};
+
 export default api;

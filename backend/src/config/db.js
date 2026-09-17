@@ -1,16 +1,10 @@
 const mongoose = require("mongoose");
-const dns = require("dns");
 
-// Use public DNS servers for MongoDB SRV resolution
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
-
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("MongoDB connected successfully");
-  } catch (error) {
-    throw new Error(`MongoDB connection failed: ${error.message}`);
-  }
-};
+async function connectDB() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error("MONGODB_URI is not configured");
+  await mongoose.connect(uri);
+  console.log("MongoDB connected");
+}
 
 module.exports = connectDB;
