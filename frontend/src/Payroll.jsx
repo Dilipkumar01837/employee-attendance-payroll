@@ -35,7 +35,7 @@ function Payroll({ user }) {
       setError(err.message);
     } finally {
       // The request lifecycle controls this loading indicator.
-      // eslint-disable-next-line react/set-state-in-effect
+      // oxlint-disable-next-line react(set-state-in-effect)
       setLoading(false);
     }
   }, [isAdminOrHR]);

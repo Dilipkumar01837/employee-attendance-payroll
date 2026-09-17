@@ -566,6 +566,114 @@ button:disabled {
   background: #326b49;
 }
 
+.section-description {
+  margin: 8px 0 0;
+  color: #66746a;
+}
+
+.employee-form-card,
+.employee-toolbar,
+.employee-table-wrap {
+  border: 1px solid #d8e1d8;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(54, 71, 58, 0.05);
+}
+
+.employee-form-card {
+  margin: 24px 0 16px;
+  padding: 24px;
+}
+
+.employee-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.employee-form-grid label {
+  margin-bottom: 0;
+}
+
+.form-submit-button {
+  width: auto;
+  margin-top: 20px;
+}
+
+.employee-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px auto;
+  gap: 10px;
+  margin: 22px 0 16px;
+  padding: 12px;
+}
+
+.employee-toolbar input,
+.employee-toolbar select {
+  background: #f8faf7;
+}
+
+.employee-toolbar .secondary-button {
+  padding: 10px 16px;
+}
+
+.employee-table-wrap {
+  overflow-x: auto;
+}
+
+.employee-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 820px;
+}
+
+.employee-table th,
+.employee-table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid #e2e9e1;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.employee-table th {
+  color: #718076;
+  background: #f7faf6;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.employee-table td strong,
+.employee-table td span {
+  display: block;
+}
+
+.employee-table td span:not(.status-pill) {
+  margin-top: 5px;
+  color: #718076;
+  font-size: 0.8rem;
+}
+
+.table-actions {
+  white-space: nowrap;
+}
+
+.table-action {
+  margin-right: 8px;
+  padding: 7px 9px;
+  border: 1px solid #cbd7cc;
+  border-radius: 4px;
+  color: #326b49;
+  background: #fff;
+  font-size: 0.75rem;
+}
+
+.table-action:hover {
+  border-color: #326b49;
+  background: #edf3ed;
+}
+
 /* Employee records */
 
 .record-list {
@@ -1050,6 +1158,15 @@ button:disabled {
   .leave-details {
     grid-template-columns: 1fr;
     gap: 0;
+  }
+
+  .employee-form-grid,
+  .employee-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-form-card {
+    padding: 20px;
   }
 
   .form-card {

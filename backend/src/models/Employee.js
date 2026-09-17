@@ -35,11 +35,28 @@ const employeeSchema = new mongoose.Schema(
       trim: true,
     },
 
+    phone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    salary: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+
     dateOfJoining: {
       type: Date,
       required: true,
     },
 
+    employmentStatus: {
+      type: String,
+      enum: ["active", "inactive"],
+      default: "active",
+    },
     isActive: {
       type: Boolean,
       default: true,

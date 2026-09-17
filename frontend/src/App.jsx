@@ -3,6 +3,7 @@ import "./App.css";
 import api, { TOKEN_KEY } from "./services/api";
 import Dashboard from "./pages/Dashboard";
 import Payroll from "./Payroll";
+import EmployeeManagement from "./components/EmployeeManagement";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -665,51 +666,10 @@ function App() {
       ====================================== */}
 
       {view === "directory" && (
-        <section className="records-section">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Directory</p>
-
-              <h2>Employee records</h2>
-            </div>
-
-            <button
-              className="secondary-button"
-              onClick={loadEmployees}
-              type="button"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {employees.length ? (
-            <div className="record-list">
-              {employees.map((employee) => (
-                <article
-                  className="record"
-                  key={employee._id}
-                >
-                  <div>
-                    <strong>{employee.name}</strong>
-
-                    <span>
-                      {employee.designation} /{" "}
-                      {employee.department}
-                    </span>
-                  </div>
-
-                  <span className="record-id">
-                    {employee.employeeId}
-                  </span>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              No employee records have been added yet.
-            </div>
-          )}
-        </section>
+        <EmployeeManagement
+          user={user}
+          onEmployeesChanged={loadEmployees}
+        />
       )}
 
 
