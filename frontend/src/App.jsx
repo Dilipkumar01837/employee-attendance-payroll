@@ -105,6 +105,11 @@ function App() {
           );
 
           if (employee) {
+            setLeaveForm((current) => ({
+              ...current,
+              employeeId: employee.employeeId,
+            }));
+
             await loadMyLeaves(employee.employeeId);
           }
         }
@@ -117,6 +122,28 @@ function App() {
     };
 
     restoreSession();
+  }, []);
+
+  // ==========================================
+  // SESSION EXPIRED (GLOBAL 401)
+  // ==========================================
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setUser(null);
+      setEmployees([]);
+      setLeaves([]);
+      setError("Your session has expired. Please sign in again.");
+      setSuccess("");
+      setMode("login");
+      setView("dashboard");
+    };
+
+    window.addEventListener("auth:expired", handleSessionExpired);
+
+    return () => {
+      window.removeEventListener("auth:expired", handleSessionExpired);
+    };
   }, []);
 
   // ==========================================
@@ -166,6 +193,11 @@ function App() {
         );
 
         if (employee) {
+          setLeaveForm((current) => ({
+            ...current,
+            employeeId: employee.employeeId,
+          }));
+
           await loadMyLeaves(employee.employeeId);
         }
       }
@@ -271,12 +303,9 @@ function App() {
     setError("");
     setSuccess("");
 
-    const employeeId =
-      leaveForm.employeeId || employees[0]?.employeeId || "";
-
     setLeaveForm((current) => ({
       ...current,
-      employeeId,
+      employeeId: current.employeeId || "",
     }));
 
     setView("apply-leave");
@@ -693,30 +722,11 @@ function App() {
               <label>
                 Employee ID
 
-                <select
-                  required
+                <input
+                  readOnly
                   value={leaveForm.employeeId}
-                  onChange={(event) =>
-                    setLeaveForm({
-                      ...leaveForm,
-                      employeeId: event.target.value,
-                    })
-                  }
-                >
-                  <option value="">
-                    Select employee
-                  </option>
-
-                  {employees.map((employee) => (
-                    <option
-                      key={employee._id}
-                      value={employee.employeeId}
-                    >
-                      {employee.employeeId} —{" "}
-                      {employee.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="No employee record linked"
+                />
               </label>
 
 

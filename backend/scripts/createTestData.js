@@ -71,6 +71,23 @@ const createTestData = async () => {
       { upsert: true, new: true }
     );
 
+    // -------------------------
+    // CREATE EMPLOYEE USER (so the demo employee can log in)
+    // -------------------------
+    const employeePassword = await bcrypt.hash("Employee@123", 10);
+
+    await User.findOneAndUpdate(
+      { email: "employee@test.com" },
+      {
+        name: "Test Employee",
+        email: "employee@test.com",
+        password: employeePassword,
+        role: "employee",
+        isActive: true,
+      },
+      { upsert: true, new: true }
+    );
+
     console.log("\n===== TEST DATA CREATED =====");
 
     console.log("\nADMIN");
@@ -86,6 +103,8 @@ const createTestData = async () => {
     console.log("\nEMPLOYEE");
     console.log("Employee ID:", employee.employeeId);
     console.log("Name:", employee.name);
+    console.log("Email: employee@test.com");
+    console.log("Password: Employee@123");
 
     await mongoose.disconnect();
     console.log("\nDone.");

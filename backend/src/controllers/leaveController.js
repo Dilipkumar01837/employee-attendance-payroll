@@ -1,11 +1,11 @@
 const Leave = require("../models/Leave");
 const Employee = require("../models/Employee");
+const User = require("../models/User");
 
 // Apply for leave
 const applyLeave = async (req, res) => {
   try {
     const {
-      employeeId,
       leaveType,
       startDate,
       endDate,
@@ -13,23 +13,38 @@ const applyLeave = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!employeeId || !leaveType || !startDate || !endDate || !reason) {
+    if (!leaveType || !startDate || !endDate || !reason) {
       return res.status(400).json({
         success: false,
         message:
-          "Employee ID, leave type, start date, end date and reason are required",
+          "Leave type, start date, end date and reason are required",
       });
     }
 
-    // Check whether employee exists
-    const employee = await Employee.findOne({ employeeId });
+    // Link the leave request to the logged-in user's employee record.
+    // The employee ID is derived from the authenticated user, never from the body.
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const employee = await Employee.findOne({
+      email: user.email.toLowerCase(),
+    });
 
     if (!employee) {
-      return res.status(404).json({
+      return res.status(400).json({
         success: false,
-        message: "Employee not found",
+        message:
+          "No employee record is linked to your account. Please contact HR/Admin.",
       });
     }
+
+    const employeeId = employee.employeeId;
 
     // Check whether employee is active
     if (!employee.isActive) {
@@ -91,7 +106,6 @@ const applyLeave = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to apply for leave",
-      error: error.message,
     });
   }
 };
@@ -100,26 +114,32 @@ const applyLeave = async (req, res) => {
 // Get employee's leave history
 const getMyLeaves = async (req, res) => {
   try {
-    const { employeeId } = req.query;
+    // Derive the employee record from the authenticated user,
+    // never from a client-supplied employee ID.
+    const user = await User.findById(req.user.id);
 
-    if (!employeeId) {
-      return res.status(400).json({
+    if (!user) {
+      return res.status(401).json({
         success: false,
-        message: "Employee ID is required",
+        message: "User not found",
       });
     }
 
-    // Check whether employee exists
-    const employee = await Employee.findOne({ employeeId });
+    const employee = await Employee.findOne({
+      email: user.email.toLowerCase(),
+    });
 
     if (!employee) {
       return res.status(404).json({
         success: false,
-        message: "Employee not found",
+        message:
+          "No employee record is linked to your account. Please contact HR/Admin.",
       });
     }
 
-    const leaves = await Leave.find({ employeeId }).sort({
+    const leaves = await Leave.find({
+      employeeId: employee.employeeId,
+    }).sort({
       createdAt: -1,
     });
 
@@ -132,7 +152,6 @@ const getMyLeaves = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch leave history",
-      error: error.message,
     });
   }
 };
@@ -141,7 +160,19 @@ const getMyLeaves = async (req, res) => {
 // HR/Admin - Get all leave requests
 const getAllLeaves = async (req, res) => {
   try {
-    const { status, employeeId, leaveType } = req.query;
+    const {
+      status,
+      employeeId,
+      leaveType,
+      page = 1,
+      limit = 50,
+    } = req.query;
+
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const pageSize = Math.min(
+      Math.max(parseInt(limit, 10) || 50, 1),
+      100
+    );
 
     const filter = {};
 
@@ -157,20 +188,27 @@ const getAllLeaves = async (req, res) => {
       filter.leaveType = leaveType;
     }
 
-    const leaves = await Leave.find(filter).sort({
-      createdAt: -1,
-    });
+    const totalCount = await Leave.countDocuments(filter);
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    const leaves = await Leave.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((pageNumber - 1) * pageSize)
+      .limit(pageSize);
 
     return res.status(200).json({
       success: true,
       count: leaves.length,
+      totalCount,
+      totalPages,
+      page: pageNumber,
+      limit: pageSize,
       data: leaves,
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch leave requests",
-      error: error.message,
     });
   }
 };
@@ -213,7 +251,6 @@ const approveLeave = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to approve leave",
-      error: error.message,
     });
   }
 };
@@ -256,7 +293,6 @@ const rejectLeave = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to reject leave",
-      error: error.message,
     });
   }
 };
@@ -302,8 +338,8 @@ const getApprovedLeaveDaysForPayroll = async (req, res) => {
       });
     }
 
-    const monthStart = new Date(year, monthNumber - 1, 1);
-    const monthEnd = new Date(year, monthNumber, 0);
+    const monthStart = new Date(Date.UTC(year, monthNumber - 1, 1));
+    const monthEnd = new Date(Date.UTC(year, monthNumber, 0));
 
     const leaves = await Leave.find({
       employeeId,
@@ -341,7 +377,6 @@ const getApprovedLeaveDaysForPayroll = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to calculate approved leave days",
-      error: error.message,
     });
   }
 };

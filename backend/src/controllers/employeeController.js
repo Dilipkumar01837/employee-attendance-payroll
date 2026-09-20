@@ -24,7 +24,20 @@ const createEmployee = async (req, res) => {
 // Get all employees
 const getEmployees = async (req, res) => {
   try {
-    const { search, status, department } = req.query;
+    const {
+      search,
+      status,
+      department,
+      page = 1,
+      limit = 50,
+    } = req.query;
+
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const pageSize = Math.min(
+      Math.max(parseInt(limit, 10) || 50, 1),
+      100
+    );
+
     const filter = {};
 
     if (status) filter.employmentStatus = status;
@@ -41,17 +54,34 @@ const getEmployees = async (req, res) => {
       ];
     }
 
-    const employees = await Employee.find(filter).sort({ createdAt: -1 });
+    let query = Employee.find(filter);
+
+    // Employees must not see salary details of other employees
+    if (req.user.role === "employee") {
+      query = query.select("-salary");
+    }
+
+    const totalCount = await Employee.countDocuments(filter);
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    const employees = await query
+      .sort({ createdAt: -1 })
+      .skip((pageNumber - 1) * pageSize)
+      .limit(pageSize);
 
     res.status(200).json({
       success: true,
       count: employees.length,
+      totalCount,
+      totalPages,
+      page: pageNumber,
+      limit: pageSize,
       data: employees,
     });
-  } catch (error) {
+} catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to delete employee",
     });
   }
 };

@@ -49,6 +49,22 @@ app.use("/api/employees", employeeRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/payroll", payrollRoutes);
 
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "API endpoint not found",
+  });
+});
+
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+
+  res.status(500).json({
+    success: false,
+    message: "Server error",
+  });
+});
+
 connectDB()
   .then(() => {
     app.listen(port, () => {

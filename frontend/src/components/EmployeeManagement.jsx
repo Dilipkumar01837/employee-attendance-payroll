@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../services/api";
 
 const emptyForm = {
@@ -23,22 +23,51 @@ function EmployeeManagement({ user, onEmployeesChanged }) {
   const [error, setError] = useState("");
   const canManage = user.role === "admin" || user.role === "hr";
 
+  const searchRef = useRef("");
+  const statusRef = useRef("");
+  const requestSeq = useRef(0);
+
+  useEffect(() => {
+    searchRef.current = search;
+  }, [search]);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  const getEmployeeStatus = (employee) =>
+    employee.employmentStatus === "inactive" ||
+    employee.isActive === false
+      ? "inactive"
+      : "active";
+
   const loadEmployees = useCallback(async () => {
     setError("");
 
+    const seq = ++requestSeq.current;
+
     try {
       const query = new URLSearchParams();
-      if (search.trim()) query.set("search", search.trim());
-      if (status) query.set("status", status);
+      if (searchRef.current.trim()) {
+        query.set("search", searchRef.current.trim());
+      }
+      if (statusRef.current) {
+        query.set("status", statusRef.current);
+      }
       const data = await api(`/api/employees?${query.toString()}`);
-      setEmployees(data.data || []);
+
+      if (seq === requestSeq.current) {
+        setEmployees(data.data || []);
+      }
     } catch (err) {
-      setError(err.message);
+      if (seq === requestSeq.current) {
+        setError(err.message);
+      }
     } finally {
       // oxlint-disable-next-line react(set-state-in-effect)
       setLoading(false);
     }
-  }, [search, status]);
+  }, []);
 
   useEffect(() => {
     loadEmployees();
@@ -97,7 +126,8 @@ function EmployeeManagement({ user, onEmployeesChanged }) {
   };
 
   const toggleStatus = async (employee) => {
-    const nextStatus = employee.employmentStatus === "inactive" ? "active" : "inactive";
+    const nextStatus =
+      getEmployeeStatus(employee) === "inactive" ? "active" : "inactive";
     setError("");
 
     try {
@@ -168,7 +198,7 @@ function EmployeeManagement({ user, onEmployeesChanged }) {
                 <td>{employee.department}</td>
                 <td><strong>{employee.email}</strong><span>{employee.phone || "No phone"}</span></td>
                 <td>{employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString() : "Not set"}</td>
-                <td><span className={`status-pill status-${employee.employmentStatus || (employee.isActive === false ? "inactive" : "active")}`}>{employee.employmentStatus || (employee.isActive === false ? "inactive" : "active")}</span></td>
+                <td><span className={`status-pill status-${getEmployeeStatus(employee)}`}>{getEmployeeStatus(employee)}</span></td>
                 {canManage && <td className="table-actions"><button className="table-action" onClick={() => editEmployee(employee)} type="button">Edit</button><button className="table-action" onClick={() => toggleStatus(employee)} type="button">{employee.employmentStatus === "inactive" ? "Activate" : "Deactivate"}</button></td>}
               </tr>
             ))}</tbody>

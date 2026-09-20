@@ -56,8 +56,8 @@ const generatePayroll = async (req, res) => {
     }
 
     // Get approved leave days for this employee and payroll month
-    const monthStart = new Date(year, monthNumber - 1, 1);
-    const monthEnd = new Date(year, monthNumber, 0);
+    const monthStart = new Date(Date.UTC(year, monthNumber - 1, 1));
+    const monthEnd = new Date(Date.UTC(year, monthNumber, 0));
 
     const leaves = await Leave.find({
       employeeId: employeeRecord.employeeId,
@@ -86,6 +86,12 @@ const generatePayroll = async (req, res) => {
     // Gross Salary = Basic Salary + Allowances
     const grossSalary =
       Number(basicSalary) + Number(allowances);
+
+    if (Number(deductions) > grossSalary) {
+      return res.status(400).json({
+        message: "Deductions cannot exceed gross salary",
+      });
+    }
 
     // Net Salary = Gross Salary - Deductions
     const netSalary =
@@ -116,7 +122,6 @@ const generatePayroll = async (req, res) => {
 
     res.status(500).json({
       message: "Server error",
-      error: error.message,
     });
   }
 };
@@ -137,7 +142,6 @@ const getAllPayrolls = async (req, res) => {
 
     res.status(500).json({
       message: "Server error",
-      error: error.message,
     });
   }
 };
@@ -164,7 +168,6 @@ const getPayrollById = async (req, res) => {
 
     res.status(500).json({
       message: "Server error",
-      error: error.message,
     });
   }
 };
@@ -207,7 +210,6 @@ const getMyPayrolls = async (req, res) => {
 
     res.status(500).json({
       message: "Server error",
-      error: error.message,
     });
   }
 };
@@ -251,7 +253,6 @@ const updatePayrollStatus = async (req, res) => {
 
     res.status(500).json({
       message: "Server error",
-      error: error.message,
     });
   }
 };
