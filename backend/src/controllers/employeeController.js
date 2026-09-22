@@ -89,7 +89,14 @@ const getEmployees = async (req, res) => {
 // Get employee by ID
 const getEmployeeById = async (req, res) => {
   try {
-    const employee = await Employee.findById(req.params.id);
+    const query = Employee.findById(req.params.id);
+
+    // Employees must not see salary details of other employees
+    if (req.user.role === "employee") {
+      query.select("-salary");
+    }
+
+    const employee = await query;
 
     if (!employee) {
       return res.status(404).json({
@@ -103,9 +110,12 @@ const getEmployeeById = async (req, res) => {
       data: employee,
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.name === "CastError" ? 404 : 500).json({
       success: false,
-      message: error.message,
+      message:
+        error.name === "CastError"
+          ? "Employee not found"
+          : error.message,
     });
   }
 };

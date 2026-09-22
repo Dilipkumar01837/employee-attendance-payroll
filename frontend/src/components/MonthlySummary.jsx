@@ -117,7 +117,9 @@ function MonthlySummary({ employees, user, onError }) {
       ) : (
         <div className="empty-state">
           {!employeeId
-            ? "Select an employee to view summary."
+            ? user.role === "employee"
+              ? "No employee record is linked to your account. Contact HR/Admin."
+              : "Select an employee to view summary."
             : "No summary data available for this month."}
         </div>
       )}

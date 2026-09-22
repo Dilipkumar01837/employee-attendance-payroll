@@ -648,20 +648,22 @@ function App() {
           </button>
         )}
 
-        <button
-          className={
-            view === "check-in"
-              ? "nav-button active"
-              : "nav-button"
-          }
-          onClick={() => {
-            setError("");
-            setSuccess("");
-            setView("check-in");
-          }}
-        >
-          Check In
-        </button>
+        {user.role === "employee" && (
+          <button
+            className={
+              view === "check-in"
+                ? "nav-button active"
+                : "nav-button"
+            }
+            onClick={() => {
+              setError("");
+              setSuccess("");
+              setView("check-in");
+            }}
+          >
+            Check In
+          </button>
+        )}
 
         {user.role === "employee" && (
           <button
@@ -1143,7 +1145,7 @@ function App() {
           CHECK IN / OUT
       ====================================== */}
 
-      {view === "check-in" && (
+      {user.role === "employee" && view === "check-in" && (
         <section className="records-section">
           <div className="section-heading">
             <div>

@@ -103,7 +103,7 @@ function Dashboard({ user, employees = [], leaves = [], onOpenApplyLeave }) {
           </section>
         </div>
 
-        <EmptyDataCard title="Attendance tracking" text="Attendance records are not available in the database yet." />
+        <EmptyDataCard title="Attendance tracking" text="Check in daily and review your history from the Attendance section." />
       </div>
     );
   }
@@ -129,7 +129,7 @@ function Dashboard({ user, employees = [], leaves = [], onOpenApplyLeave }) {
           </section>
           <section className="dashboard-card role-panel"><div className="card-heading"><div><h5>Leave status</h5><p>Live request distribution</p></div></div><div className="donut-area small-donut">{hasLeaveData ? <Doughnut data={leaveStatusData} options={chartOptions} /> : <EmptyState text="No leave records available." />}</div></section>
         </div>
-        <EmptyDataCard title="Attendance and payroll" text="These records are not available in the database yet." />
+<EmptyDataCard title="Attendance and payroll" text="Review employee attendance records and payroll from the sections above." />
       </div>
     );
   }
@@ -148,7 +148,7 @@ function Dashboard({ user, employees = [], leaves = [], onOpenApplyLeave }) {
         <section className="dashboard-card role-panel"><div className="card-heading"><div><h5>Workforce directory</h5><p>Latest employee records</p></div></div>{employees.length ? <div className="compact-list">{employees.slice(0, 6).map((employee) => <div className="compact-list-item" key={employee._id}><div><strong>{employee.name}</strong><span>{employee.department} · {employee.designation}</span></div><StatusPill status={employee.isActive === false ? 'Inactive' : 'Active'} /></div>)}</div> : <EmptyState text="No employee records available." />}</section>
         <section className="dashboard-card role-panel"><div className="card-heading"><div><h5>Leave oversight</h5><p>Organization request status</p></div></div><div className="donut-area small-donut">{hasLeaveData ? <Doughnut data={leaveStatusData} options={chartOptions} /> : <EmptyState text="No leave records available." />}</div></section>
       </div>
-      <EmptyDataCard title="Attendance and payroll" text="These records are not available in the database yet." />
+      <EmptyDataCard title="Attendance and payroll" text="Review attendance records and payroll from the sections above." />
     </div>
   );
 }
