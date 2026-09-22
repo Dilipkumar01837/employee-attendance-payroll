@@ -101,19 +101,19 @@ const createTestData = async () => {
       {
         email: "admin@test.com",
         name: "Test Admin",
-        password: "Admin@123",
+        password: "EbSycq92GdZnku",
         role: "admin",
       },
       {
         email: "hr@test.com",
         name: "Test HR",
-        password: "HR@123456",
+        password: "9vJYsiBI6wt2Hg",
         role: "hr",
       },
       {
         email: "employee@test.com",
         name: "Test Employee",
-        password: "Employee@123",
+        password: "rxgZM7IBXwhDYO",
         role: "employee",
       },
     ];
@@ -316,9 +316,9 @@ const createTestData = async () => {
     console.log(`Leave requests: ${leaveCount}`);
     console.log(`Payroll records: ${payrollCount}`);
 
-    console.log("\nADMIN  -> admin@test.com / Admin@123");
-    console.log("HR     -> hr@test.com / HR@123456");
-    console.log("EMPLOYEE -> employee@test.com / Employee@123");
+    console.log("ADMIN  -> admin@test.com / EbSycq92GdZnku");
+    console.log("HR     -> hr@test.com / 9vJYsiBI6wt2Hg");
+    console.log("EMPLOYEE -> employee@test.com / rxgZM7IBXwhDYO");
 
     console.log("\nDemo employee EMP001 has 40 days of attendance history.");
     console.log("Today is left open for EMP001 so you can check in live.");
