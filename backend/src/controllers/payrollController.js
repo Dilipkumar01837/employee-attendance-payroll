@@ -15,6 +15,7 @@ const generatePayroll = async (req, res) => {
 
     if (!employee || !payrollMonth || basicSalary === undefined) {
       return res.status(400).json({
+        success: false,
         message: "Employee, payroll month and basic salary are required",
       });
     }
@@ -22,6 +23,7 @@ const generatePayroll = async (req, res) => {
     // Validate payroll month format
     if (!/^\d{4}-\d{2}$/.test(payrollMonth)) {
       return res.status(400).json({
+        success: false,
         message: "Payroll month must be in YYYY-MM format",
       });
     }
@@ -30,6 +32,7 @@ const generatePayroll = async (req, res) => {
 
     if (monthNumber < 1 || monthNumber > 12) {
       return res.status(400).json({
+        success: false,
         message: "Invalid payroll month",
       });
     }
@@ -39,6 +42,7 @@ const generatePayroll = async (req, res) => {
 
     if (!employeeRecord) {
       return res.status(404).json({
+        success: false,
         message: "Employee not found",
       });
     }
@@ -51,6 +55,7 @@ const generatePayroll = async (req, res) => {
 
     if (existingPayroll) {
       return res.status(409).json({
+        success: false,
         message: "Payroll already exists for this employee and month",
       });
     }
@@ -66,7 +71,10 @@ const generatePayroll = async (req, res) => {
       endDate: { $gte: monthStart },
     });
 
+    const daysInMonth = new Date(year, monthNumber, 0).getDate();
+
     let approvedLeaveDays = 0;
+    let unpaidLeaveDays = 0;
 
     leaves.forEach((leave) => {
       const leaveStart =
@@ -81,6 +89,11 @@ const generatePayroll = async (req, res) => {
         Math.floor((leaveEnd - leaveStart) / millisecondsPerDay) + 1;
 
       approvedLeaveDays += days;
+
+      // Only "Other" (unpaid) leave reduces take-home pay
+      if (leave.leaveType === "Other") {
+        unpaidLeaveDays += days;
+      }
     });
 
     // Gross Salary = Basic Salary + Allowances
@@ -89,13 +102,24 @@ const generatePayroll = async (req, res) => {
 
     if (Number(deductions) > grossSalary) {
       return res.status(400).json({
+        success: false,
         message: "Deductions cannot exceed gross salary",
       });
     }
 
-    // Net Salary = Gross Salary - Deductions
-    const netSalary =
-      grossSalary - Number(deductions);
+    // Net Salary = Gross Salary - Deductions - Unpaid Leave
+    const perDaySalary =
+      daysInMonth > 0 ? grossSalary / daysInMonth : 0;
+
+    const leaveDeduction = Math.max(
+      0,
+      Math.round(perDaySalary * unpaidLeaveDays * 100) / 100
+    );
+
+    const netSalary = Math.max(
+      0,
+      grossSalary - Number(deductions) - leaveDeduction
+    );
 
     const payroll = await Payroll.create({
       employee,
@@ -106,6 +130,8 @@ const generatePayroll = async (req, res) => {
 
       leaveSummary: {
         approvedLeaveDays,
+        unpaidLeaveDays,
+        leaveDeduction,
       },
 
       grossSalary,
@@ -114,13 +140,15 @@ const generatePayroll = async (req, res) => {
     });
 
     res.status(201).json({
+      success: true,
       message: "Payroll generated successfully",
-      payroll,
+      data: payroll,
     });
   } catch (error) {
     console.error("Generate payroll error:", error);
 
     res.status(500).json({
+      success: false,
       message: "Server error",
     });
   }
@@ -136,11 +164,15 @@ const getAllPayrolls = async (req, res) => {
       )
       .sort({ createdAt: -1 });
 
-    res.status(200).json(payrolls);
+    res.status(200).json({
+      success: true,
+      data: payrolls,
+    });
   } catch (error) {
     console.error("Get payrolls error:", error);
 
     res.status(500).json({
+      success: false,
       message: "Server error",
     });
   }
@@ -158,15 +190,20 @@ const getPayrollById = async (req, res) => {
 
     if (!payroll) {
       return res.status(404).json({
+        success: false,
         message: "Payroll not found",
       });
     }
 
-    res.status(200).json(payroll);
+    res.status(200).json({
+      success: true,
+      data: payroll,
+    });
   } catch (error) {
     console.error("Get payroll error:", error);
 
     res.status(500).json({
+      success: false,
       message: "Server error",
     });
   }
@@ -181,6 +218,7 @@ const getMyPayrolls = async (req, res) => {
 
     if (!user) {
       return res.status(404).json({
+        success: false,
         message: "User not found",
       });
     }
@@ -191,6 +229,7 @@ const getMyPayrolls = async (req, res) => {
 
     if (!employee) {
       return res.status(404).json({
+        success: false,
         message: "Employee record not found",
       });
     }
@@ -204,11 +243,15 @@ const getMyPayrolls = async (req, res) => {
       )
       .sort({ createdAt: -1 });
 
-    res.status(200).json(payrolls);
+    res.status(200).json({
+      success: true,
+      data: payrolls,
+    });
   } catch (error) {
     console.error("Get my payrolls error:", error);
 
     res.status(500).json({
+      success: false,
       message: "Server error",
     });
   }
@@ -228,6 +271,7 @@ const updatePayrollStatus = async (req, res) => {
 
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({
+        success: false,
         message: "Invalid payroll status",
       });
     }
@@ -236,6 +280,7 @@ const updatePayrollStatus = async (req, res) => {
 
     if (!payroll) {
       return res.status(404).json({
+        success: false,
         message: "Payroll not found",
       });
     }
@@ -245,13 +290,15 @@ const updatePayrollStatus = async (req, res) => {
     await payroll.save();
 
     res.status(200).json({
+      success: true,
       message: "Payroll status updated successfully",
-      payroll,
+      data: payroll,
     });
   } catch (error) {
     console.error("Update payroll status error:", error);
 
     res.status(500).json({
+      success: false,
       message: "Server error",
     });
   }

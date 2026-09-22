@@ -30,7 +30,7 @@ function Payroll({ user }) {
 
       const data = await api(endpoint);
 
-      setPayrolls(Array.isArray(data) ? data : []);
+      setPayrolls(data.data || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -107,7 +107,7 @@ function Payroll({ user }) {
       await loadPayrolls();
 
       if (selectedPayroll?._id === payrollId) {
-        setSelectedPayroll(data.payroll);
+        setSelectedPayroll(data.data);
       }
     } catch (err) {
       setError(err.message);
@@ -328,6 +328,16 @@ function Payroll({ user }) {
           <p>
             <strong>Approved Leave Days:</strong>{" "}
             {selectedPayroll.leaveSummary?.approvedLeaveDays || 0}
+          </p>
+
+          <p>
+            <strong>Unpaid Leave Days:</strong>{" "}
+            {selectedPayroll.leaveSummary?.unpaidLeaveDays || 0}
+          </p>
+
+          <p>
+            <strong>Leave Deduction:</strong>{" "}
+            ₹{selectedPayroll.leaveSummary?.leaveDeduction || 0}
           </p>
 
           <p>

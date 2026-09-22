@@ -20,14 +20,19 @@ const getDaysInMonth = (year, month) => {
   return new Date(year, month, 0).getDate();
 };
 
-const resolveEmployee = async (userId) => {
-  const employee = await Employee.findOne({ user: userId });
+const resolveEmployee = async (userId, email) => {
+  let employee = await Employee.findOne({ user: userId });
+
+  if (!employee) {
+    employee = await Employee.findOne({ email: (email || "").toLowerCase() });
+  }
+
   return employee;
 };
 
 const checkIn = async (req, res) => {
   try {
-    const employee = await resolveEmployee(req.user.id);
+    const employee = await resolveEmployee(req.user.id, req.user.email);
 
     if (!employee) {
       return res.status(404).json({
@@ -90,7 +95,7 @@ const checkIn = async (req, res) => {
 
 const checkOut = async (req, res) => {
   try {
-    const employee = await resolveEmployee(req.user.id);
+    const employee = await resolveEmployee(req.user.id, req.user.email);
 
     if (!employee) {
       return res.status(404).json({
@@ -174,7 +179,7 @@ const getTodayAttendance = async (req, res) => {
       });
     }
 
-    const employee = await resolveEmployee(req.user.id);
+    const employee = await resolveEmployee(req.user.id, req.user.email);
 
     if (!employee) {
       return res.status(404).json({
@@ -203,7 +208,7 @@ const getTodayAttendance = async (req, res) => {
 
 const getMyAttendance = async (req, res) => {
   try {
-    const employee = await resolveEmployee(req.user.id);
+    const employee = await resolveEmployee(req.user.id, req.user.email);
 
     if (!employee) {
       return res.status(404).json({
@@ -301,7 +306,7 @@ const getMonthlySummary = async (req, res) => {
     let targetEmployeeId = employeeId;
 
     if (req.user.role === "employee") {
-      const employee = await resolveEmployee(req.user.id);
+      const employee = await resolveEmployee(req.user.id, req.user.email);
 
       if (!employee) {
         return res.status(404).json({

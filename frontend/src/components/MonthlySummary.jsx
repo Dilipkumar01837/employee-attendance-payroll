@@ -14,11 +14,12 @@ function MonthlySummary({ employees, user, onError }) {
 
   useEffect(() => {
     if (user.role === "employee" && employees.length > 0) {
-      const own = employees.find((e) => e.user === user.id);
+      const own =
+        employees.find((e) => e.email === user.email) ||
+        employees.find((e) => e.user && String(e.user) === String(user.id));
+
       if (own) {
         setEmployeeId(own.employeeId);
-      } else if (employees.length > 0) {
-        setEmployeeId(employees[0].employeeId);
       }
     }
   }, [employees, user]);

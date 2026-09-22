@@ -49,6 +49,7 @@ function App() {
       return loadedEmployees;
     } catch (err) {
       setError(err.message);
+      return [];
     }
   };
 
