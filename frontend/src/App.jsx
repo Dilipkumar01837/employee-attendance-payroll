@@ -4,6 +4,10 @@ import api, { TOKEN_KEY } from "./services/api";
 import Dashboard from "./pages/Dashboard";
 import Payroll from "./Payroll";
 import EmployeeManagement from "./components/EmployeeManagement";
+import CheckInCard from "./components/CheckInCard";
+import AttendanceHistory from "./components/AttendanceHistory";
+import MonthlySummary from "./components/MonthlySummary";
+import AttendanceManagement from "./components/AttendanceManagement";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -642,6 +646,71 @@ function App() {
             My Payroll
           </button>
         )}
+
+        <button
+          className={
+            view === "check-in"
+              ? "nav-button active"
+              : "nav-button"
+          }
+          onClick={() => {
+            setError("");
+            setSuccess("");
+            setView("check-in");
+          }}
+        >
+          Check In
+        </button>
+
+        {user.role === "employee" && (
+          <button
+            className={
+              view === "attendance-history"
+                ? "nav-button active"
+                : "nav-button"
+            }
+            onClick={() => {
+              setError("");
+              setSuccess("");
+              setView("attendance-history");
+            }}
+          >
+            My Attendance
+          </button>
+        )}
+
+        <button
+          className={
+            view === "monthly-summary"
+              ? "nav-button active"
+              : "nav-button"
+          }
+          onClick={() => {
+            setError("");
+            setSuccess("");
+            setView("monthly-summary");
+          }}
+        >
+          Monthly Summary
+        </button>
+
+        {(user.role === "hr" ||
+          user.role === "admin") && (
+          <button
+            className={
+              view === "attendance-management"
+                ? "nav-button active"
+                : "nav-button"
+            }
+            onClick={() => {
+              setError("");
+              setSuccess("");
+              setView("attendance-management");
+            }}
+          >
+            Attendance Records
+          </button>
+        )}
       </nav>
 
 
@@ -1066,6 +1135,61 @@ function App() {
             </div>
           )}
         </section>
+      )}
+
+
+      {/* ======================================
+          CHECK IN / OUT
+      ====================================== */}
+
+      {view === "check-in" && (
+        <section className="records-section">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Attendance</p>
+              <h2>Today&apos;s attendance</h2>
+            </div>
+          </div>
+
+          <CheckInCard
+            onError={setError}
+            onSuccess={setSuccess}
+          />
+        </section>
+      )}
+
+
+      {/* ======================================
+          MY ATTENDANCE HISTORY
+      ====================================== */}
+
+      {view === "attendance-history" && (
+        <AttendanceHistory onError={setError} />
+      )}
+
+
+      {/* ======================================
+          MONTHLY SUMMARY
+      ====================================== */}
+
+      {view === "monthly-summary" && (
+        <MonthlySummary
+          employees={employees}
+          user={user}
+          onError={setError}
+        />
+      )}
+
+
+      {/* ======================================
+          HR / ADMIN ATTENDANCE MANAGEMENT
+      ====================================== */}
+
+      {view === "attendance-management" && (
+        <AttendanceManagement
+          employees={employees}
+          onError={setError}
+        />
       )}
 
     </main>
