@@ -52,6 +52,14 @@ const payrollSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+      unpaidLeaveDays: {
+        type: Number,
+        default: 0,
+      },
+      leaveDeduction: {
+        type: Number,
+        default: 0,
+      },
     },
 
     grossSalary: {

@@ -81,7 +81,7 @@ const getEmployees = async (req, res) => {
 } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to delete employee",
+      message: "Failed to fetch employees",
     });
   }
 };
