@@ -37,10 +37,12 @@ const payrollSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+
       presentDays: {
         type: Number,
         default: 0,
       },
+
       absentDays: {
         type: Number,
         default: 0,
@@ -52,13 +54,16 @@ const payrollSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+
       unpaidLeaveDays: {
         type: Number,
         default: 0,
       },
+
       leaveDeduction: {
         type: Number,
         default: 0,
+        min: 0,
       },
     },
 

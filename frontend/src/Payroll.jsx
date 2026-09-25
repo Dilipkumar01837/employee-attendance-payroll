@@ -325,6 +325,23 @@ function Payroll({ user }) {
             ₹{selectedPayroll.deductions}
           </p>
 
+          {/* Attendance Summary */}
+          <p>
+            <strong>Working Days:</strong>{" "}
+            {selectedPayroll.attendanceSummary?.workingDays || 0}
+          </p>
+
+          <p>
+            <strong>Present Days:</strong>{" "}
+            {selectedPayroll.attendanceSummary?.presentDays || 0}
+          </p>
+
+          <p>
+            <strong>Absent Days:</strong>{" "}
+            {selectedPayroll.attendanceSummary?.absentDays || 0}
+          </p>
+
+          {/* Leave Summary */}
           <p>
             <strong>Approved Leave Days:</strong>{" "}
             {selectedPayroll.leaveSummary?.approvedLeaveDays || 0}
