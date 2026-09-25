@@ -88,7 +88,6 @@ const checkIn = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to check in",
-      error: error.message,
     });
   }
 };
@@ -157,7 +156,6 @@ const checkOut = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to check out",
-      error: error.message,
     });
   }
 };
@@ -201,7 +199,6 @@ const getTodayAttendance = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch today's attendance",
-      error: error.message,
     });
   }
 };
@@ -243,7 +240,6 @@ const getMyAttendance = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch attendance history",
-      error: error.message,
     });
   }
 };
@@ -286,7 +282,6 @@ const getAttendanceHistory = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch attendance history",
-      error: error.message,
     });
   }
 };
@@ -401,7 +396,6 @@ const getMonthlySummary = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to calculate monthly summary",
-      error: error.message,
     });
   }
 };
