@@ -88,6 +88,53 @@ any deployed instance.
 For an end-to-end check against a running server, set `SMOKE_EMAIL` and
 `SMOKE_PASSWORD` to match a seeded account and run `npm run smoke`.
 
+## Troubleshooting
+
+### `MongoDB connection failed: querySrv ECONNREFUSED _mongodb._tcp.<cluster>`
+
+Your DNS resolver is refusing SRV queries, so the `mongodb+srv://` URI cannot be
+resolved. This is **not** a network, credentials, or Atlas-IP-access problem, and
+it is not specific to Node.
+
+Confirm which layer is broken before changing anything:
+
+```powershell
+# 1. Does the OS resolver answer the SRV query? (fails => this is a DNS problem)
+Resolve-DnsName -Name "_mongodb._tcp.<cluster-host>" -Type SRV
+
+# 2. Is the cluster actually reachable? (succeeds => the network is fine)
+Test-NetConnection -ComputerName "<a-shard-host>" -Port 27017
+```
+
+If step 1 fails but step 2 succeeds, apply the workaround — set `DNS_SERVERS` in
+`backend/.env` to a resolver that does answer SRV queries:
+
+```
+DNS_SERVERS=8.8.8.8,1.1.1.1
+```
+
+`backend/src/config/dns.js` applies this with `dns.setServers`, which only affects
+the `dns.resolve*` family. A plain `mongodb://` URI and `localhost` resolution are
+unaffected, so this is safe to leave set. The server also detects the failure and
+prints this remedy instead of a bare resolver code.
+
+**Permanent fixes.** `DNS_SERVERS` is a workaround for the resolver, not a fix for
+it. To resolve the underlying cause, either:
+
+- **Point the machine at an SRV-capable resolver.** If the OS or network resolver
+  is managed by an ISP or organisation, the usual cause is a filtered resolver
+  that does not forward SRV queries. Change the DNS servers on the network adapter
+  (or in the VPN client, which often overrides them), then confirm with step 1.
+- **Use a non-SRV connection string.** In Atlas, open the cluster's Connect modal,
+  choose your driver and version, and turn **off** the *SRV Connection String* toggle
+  under "Use this connection string in your application". This yields a standard
+  `mongodb://host1:27017,host2:27017,...` string that resolves each host with
+  ordinary `A`/`AAAA` lookups. Keep `retryWrites=true&w=majority` as the SRV string
+  implies, and add `authSource=admin`, which Atlas sets automatically for SRV strings
+  via the `TXT` record but must be stated explicitly for non-SRV strings. Note that a
+  standard string does not pick up new hosts automatically, so it must be updated if
+  the cluster topology changes.
+
 ## Scripts
 
 ### backend

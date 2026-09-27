@@ -6,6 +6,9 @@ require("dotenv").config({
 
 const mongoose = require("mongoose");
 
+// Required after dotenv so the DNS override can read DNS_SERVERS.
+require("../src/config/dns");
+
 const User = require("../src/models/User");
 const Employee = require("../src/models/Employee");
 const Attendance = require("../src/models/Attendance");

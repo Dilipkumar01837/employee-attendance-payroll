@@ -60,6 +60,19 @@ app.use(
 );
 app.use(express.json());
 
+// express.json() only sets req.body when the request actually carries a
+// matching JSON body, so a PUT/POST with no body leaves it undefined. Any
+// `const { field } = req.body` in a controller then throws a TypeError that
+// the handler's catch turns into an opaque 500. Normalise it once here rather
+// than guarding every destructuring site.
+app.use((req, res, next) => {
+  if (req.body === undefined || req.body === null) {
+    req.body = {};
+  }
+
+  next();
+});
+
 app.get("/", (req, res) => {
   res.json({
     message: "Employee Attendance & Payroll API is running",
