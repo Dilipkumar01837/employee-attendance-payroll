@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-import api, { TOKEN_KEY } from "./services/api";
+import api from "./services/api";
 import Dashboard from "./pages/Dashboard";
 import Payroll from "./Payroll";
 import EmployeeManagement from "./components/EmployeeManagement";
@@ -90,11 +90,6 @@ function App() {
 
   useEffect(() => {
     const restoreSession = async () => {
-      if (!localStorage.getItem(TOKEN_KEY)) {
-        setLoading(false);
-        return;
-      }
-
       try {
         const data = await api("/api/auth/me");
 
@@ -119,8 +114,7 @@ function App() {
           }
         }
       } catch {
-        localStorage.removeItem(TOKEN_KEY);
-        setError("Your session has expired. Please sign in again.");
+        // Not authenticated or session expired
       } finally {
         setLoading(false);
       }
@@ -178,8 +172,6 @@ function App() {
         body: JSON.stringify(body),
       });
 
-      localStorage.setItem(TOKEN_KEY, data.token);
-
       setUser(data.user);
 
       setForm({
@@ -219,8 +211,12 @@ function App() {
   // LOGOUT
   // ==========================================
 
-  const logout = () => {
-    localStorage.removeItem(TOKEN_KEY);
+  const logout = async () => {
+    try {
+      await api("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Ignore network errors during logout
+    }
 
     setUser(null);
     setEmployees([]);

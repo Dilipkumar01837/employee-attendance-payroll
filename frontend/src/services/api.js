@@ -1,30 +1,23 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-const TOKEN_KEY = "attendance_token";
+import axiosInstance from "../api/axios";
 
 const api = async (endpoint, options = {}) => {
-  const token = localStorage.getItem(TOKEN_KEY);
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  const method = (options.method || "GET").toLowerCase();
+  const data = options.body ? JSON.parse(options.body) : undefined;
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    if (response.status === 401 && token) {
-      localStorage.removeItem(TOKEN_KEY);
-      window.dispatchEvent(new Event("auth:expired"));
+  try {
+    const response = await axiosInstance({
+      url: endpoint,
+      method,
+      data,
+      headers: options.headers,
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      throw new Error(error.response.data.message || "API request failed");
     }
-
-    throw new Error(data.message || "API request failed");
+    throw new Error(error.message || "Network error");
   }
-
-  return data;
 };
 
-export { TOKEN_KEY };
 export default api;

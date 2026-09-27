@@ -77,6 +77,7 @@ const checkIn = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Error in attendanceController.checkIn:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to check in",
@@ -145,6 +146,7 @@ const checkOut = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Error in attendanceController.checkOut:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to check out",
@@ -188,6 +190,7 @@ const getTodayAttendance = async (req, res) => {
       data: record || null,
     });
   } catch (error) {
+    console.error("Error in attendanceController.getTodayAttendance:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch today's attendance",
@@ -229,6 +232,7 @@ const getMyAttendance = async (req, res) => {
       data: records,
     });
   } catch (error) {
+    console.error("Error in attendanceController.getMyAttendance:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch attendance history",
@@ -271,6 +275,7 @@ const getAttendanceHistory = async (req, res) => {
       data: records,
     });
   } catch (error) {
+    console.error("Error in attendanceController.getAttendanceHistory:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch attendance history",
@@ -336,8 +341,6 @@ const getMonthlySummary = async (req, res) => {
       endDate: { $gte: start },
     });
 
-    // A day is absent only if it has neither an attendance record nor approved
-    // leave, so a day that is both attended and on leave is not counted twice.
     const summary = computeAttendanceSummary({
       employeeId: targetEmployeeId,
       month,
@@ -353,6 +356,7 @@ const getMonthlySummary = async (req, res) => {
       data: summary,
     });
   } catch (error) {
+    console.error("Error in attendanceController.getMonthlySummary:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to calculate monthly summary",

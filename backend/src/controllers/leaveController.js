@@ -8,9 +8,6 @@ const {
 } = require("../utils/dateUtils");
 const { buildLeaveDaySets } = require("../utils/payrollMath");
 
-// Resolve the employee record behind the authenticated user. Never trust an
-// employee identifier supplied by the client. The `user` reference is
-// authoritative; the email fallback keeps older records that predate the link.
 const resolveEmployeeForUser = async (userId) => {
   let employee = await Employee.findOne({ user: userId });
 
@@ -37,7 +34,6 @@ const applyLeave = async (req, res) => {
       reason,
     } = req.body;
 
-    // Validate required fields
     if (!leaveType || !startDate || !endDate || !reason) {
       return res.status(400).json({
         success: false,
@@ -46,8 +42,6 @@ const applyLeave = async (req, res) => {
       });
     }
 
-    // Link the leave request to the logged-in user's employee record.
-    // The employee ID is derived from the authenticated user, never from the body.
     const employee = await resolveEmployeeForUser(req.user.id);
 
     if (!employee) {
@@ -60,7 +54,6 @@ const applyLeave = async (req, res) => {
 
     const employeeId = employee.employeeId;
 
-    // Check whether employee is active
     if (!employee.isActive) {
       return res.status(400).json({
         success: false,
@@ -71,7 +64,6 @@ const applyLeave = async (req, res) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    // Validate dates
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return res.status(400).json({
         success: false,
@@ -79,7 +71,6 @@ const applyLeave = async (req, res) => {
       });
     }
 
-    // End date cannot be before start date
     if (end < start) {
       return res.status(400).json({
         success: false,
@@ -87,7 +78,6 @@ const applyLeave = async (req, res) => {
       });
     }
 
-    // Check overlapping pending or approved leave
     const overlappingLeave = await Leave.findOne({
       employeeId,
       status: { $in: ["Pending", "Approved"] },
@@ -102,7 +92,6 @@ const applyLeave = async (req, res) => {
       });
     }
 
-    // Create leave application
     const leave = await Leave.create({
       employeeId,
       leaveType,
@@ -117,6 +106,7 @@ const applyLeave = async (req, res) => {
       data: leave,
     });
   } catch (error) {
+    console.error("Error in leaveController.applyLeave:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to apply for leave",
@@ -124,12 +114,9 @@ const applyLeave = async (req, res) => {
   }
 };
 
-
 // Get employee's leave history
 const getMyLeaves = async (req, res) => {
   try {
-    // Derive the employee record from the authenticated user,
-    // never from a client-supplied employee ID.
     const employee = await resolveEmployeeForUser(req.user.id);
 
     if (!employee) {
@@ -152,13 +139,13 @@ const getMyLeaves = async (req, res) => {
       data: leaves,
     });
   } catch (error) {
+    console.error("Error in leaveController.getMyLeaves:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch leave history",
     });
   }
 };
-
 
 // HR/Admin - Get all leave requests
 const getAllLeaves = async (req, res) => {
@@ -209,13 +196,13 @@ const getAllLeaves = async (req, res) => {
       data: leaves,
     });
   } catch (error) {
+    console.error("Error in leaveController.getAllLeaves:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch leave requests",
     });
   }
 };
-
 
 // HR/Admin - Approve leave
 const approveLeave = async (req, res) => {
@@ -232,7 +219,6 @@ const approveLeave = async (req, res) => {
       });
     }
 
-    // Only pending requests can be approved
     if (leave.status !== "Pending") {
       return res.status(400).json({
         success: false,
@@ -251,13 +237,13 @@ const approveLeave = async (req, res) => {
       data: leave,
     });
   } catch (error) {
+    console.error("Error in leaveController.approveLeave:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to approve leave",
     });
   }
 };
-
 
 // HR/Admin - Reject leave
 const rejectLeave = async (req, res) => {
@@ -274,7 +260,6 @@ const rejectLeave = async (req, res) => {
       });
     }
 
-    // Only pending requests can be rejected
     if (leave.status !== "Pending") {
       return res.status(400).json({
         success: false,
@@ -293,13 +278,13 @@ const rejectLeave = async (req, res) => {
       data: leave,
     });
   } catch (error) {
+    console.error("Error in leaveController.rejectLeave:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to reject leave",
     });
   }
 };
-
 
 // Payroll - Get approved leave days for an employee in a month
 const getApprovedLeaveDaysForPayroll = async (req, res) => {
@@ -314,7 +299,6 @@ const getApprovedLeaveDaysForPayroll = async (req, res) => {
       });
     }
 
-    // Expected format: YYYY-MM
     if (!isValidMonth(month)) {
       return res.status(400).json({
         success: false,
@@ -344,8 +328,6 @@ const getApprovedLeaveDaysForPayroll = async (req, res) => {
       endDate: { $gte: monthStart },
     });
 
-    // Count distinct IST calendar days so overlapping requests are not double
-    // counted and a leave spanning a month end is still exact.
     const { allDays } = buildLeaveDaySets(leaves, monthStart, monthEnd);
     const approvedLeaveDays = allDays.size;
 
@@ -358,13 +340,13 @@ const getApprovedLeaveDaysForPayroll = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Error in leaveController.getApprovedLeaveDaysForPayroll:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to calculate approved leave days",
     });
   }
 };
-
 
 module.exports = {
   applyLeave,

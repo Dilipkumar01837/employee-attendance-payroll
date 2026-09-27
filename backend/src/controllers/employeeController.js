@@ -1,10 +1,6 @@
 const Employee = require("../models/Employee");
 const User = require("../models/User");
 
-// Only these fields may be written through the employee endpoints.
-// `user`, `isActive` and `employmentStatus` are deliberately excluded so a
-// client cannot link a record to an arbitrary account or flip the lifecycle
-// flags through the generic create/update payloads.
 const WRITABLE_FIELDS = [
   "employeeId",
   "name",
@@ -45,7 +41,6 @@ const createEmployee = async (req, res) => {
   try {
     const payload = pickWritableFields(req.body);
 
-    // Accept the legacy alias without letting it bypass the whitelist.
     if (!payload.dateOfJoining && req.body.joiningDate) {
       payload.dateOfJoining = req.body.joiningDate;
     }
@@ -58,9 +53,10 @@ const createEmployee = async (req, res) => {
       data: employee,
     });
   } catch (error) {
+    console.error("Error in employeeController.createEmployee:", error);
     res.status(error.statusCode || 400).json({
       success: false,
-      message: error.message,
+      message: error.statusCode ? error.message : "Failed to create employee",
     });
   }
 };
@@ -85,9 +81,6 @@ const getEmployees = async (req, res) => {
     const filter = {};
 
     if (status) {
-      // `employmentStatus` and `isActive` can disagree, because the generic
-      // update path never touched `isActive`. Filter on whichever flag is set so
-      // "active" cannot return a record that is inactive in the other field.
       if (status === "active") {
         filter.employmentStatus = "active";
         filter.isActive = true;
@@ -116,7 +109,6 @@ const getEmployees = async (req, res) => {
         { designation: expression },
       ];
 
-      // $or may already carry the inactive clause, so combine with $and.
       if (filter.$or) {
         filter.$and = [{ $or: filter.$or }, { $or: textMatch }];
         delete filter.$or;
@@ -127,7 +119,6 @@ const getEmployees = async (req, res) => {
 
     let query = Employee.find(filter);
 
-    // Employees must not see salary details of other employees
     if (req.user.role === "employee") {
       query = query.select("-salary");
     }
@@ -149,7 +140,8 @@ const getEmployees = async (req, res) => {
       limit: pageSize,
       data: employees,
     });
-} catch (error) {
+  } catch (error) {
+    console.error("Error in employeeController.getEmployees:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch employees",
@@ -162,7 +154,6 @@ const getEmployeeById = async (req, res) => {
   try {
     const query = Employee.findById(req.params.id);
 
-    // Employees must not see salary details of other employees
     if (req.user.role === "employee") {
       query.select("-salary");
     }
@@ -181,12 +172,13 @@ const getEmployeeById = async (req, res) => {
       data: employee,
     });
   } catch (error) {
+    console.error("Error in employeeController.getEmployeeById:", error);
     res.status(error.name === "CastError" ? 404 : 500).json({
       success: false,
       message:
         error.name === "CastError"
           ? "Employee not found"
-          : error.message,
+          : "Server error while fetching employee details",
     });
   }
 };
@@ -196,7 +188,6 @@ const updateEmployee = async (req, res) => {
   try {
     const update = pickWritableFields(req.body);
 
-    // Accept the legacy alias without letting it bypass the whitelist.
     if (!update.dateOfJoining && req.body.joiningDate) {
       update.dateOfJoining = req.body.joiningDate;
     }
@@ -230,9 +221,10 @@ const updateEmployee = async (req, res) => {
       data: employee,
     });
   } catch (error) {
+    console.error("Error in employeeController.updateEmployee:", error);
     res.status(400).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to update employee",
     });
   }
 };
@@ -241,9 +233,6 @@ const updateEmployeeStatus = async (req, res) => {
   try {
     const { status } = req.body;
 
-    // Guard the enum before writing. Without this an absent or misspelt body
-    // evaluated `undefined === "active"` as false and silently deactivated the
-    // employee instead of returning a validation error.
     if (status !== "active" && status !== "inactive") {
       return res.status(400).json({
         success: false,
@@ -273,9 +262,10 @@ const updateEmployeeStatus = async (req, res) => {
       data: employee,
     });
   } catch (error) {
+    console.error("Error in employeeController.updateEmployeeStatus:", error);
     res.status(400).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to update employee status",
     });
   }
 };
@@ -292,8 +282,6 @@ const deleteEmployee = async (req, res) => {
       });
     }
 
-    // Removing the employee record must also revoke the linked login, otherwise
-    // the account stays active and can still authenticate against the API.
     if (employee.user) {
       await User.updateOne(
         { _id: employee.user },
@@ -306,9 +294,10 @@ const deleteEmployee = async (req, res) => {
       message: "Employee deleted successfully",
     });
   } catch (error) {
+    console.error("Error in employeeController.deleteEmployee:", error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to delete employee",
     });
   }
 };

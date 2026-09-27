@@ -2,6 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const mongoose = require("mongoose");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const cookieParser = require("cookie-parser");
 require("dotenv").config({
   path: path.resolve(__dirname, "../.env"),
 });
@@ -13,65 +16,93 @@ const leaveRoutes = require("./routes/leaveRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
 
+// Explicit Env Validation - Exits process if MONGO_URI, JWT_SECRET, or CLIENT_URL is missing
+const requiredEnvs = ["MONGO_URI", "JWT_SECRET", "CLIENT_URL"];
+const missingEnvs = requiredEnvs.filter((key) => !process.env[key]);
+if (missingEnvs.length > 0) {
+  console.error(
+    `[FATAL STARTUP ERROR] Missing required environment variable(s): ${missingEnvs.join(
+      ", "
+    )}`
+  );
+  process.exit(1);
+}
+
+// Startup check for insecure JWT_SECRET in production
+if (process.env.NODE_ENV === "production") {
+  const secret = process.env.JWT_SECRET || "";
+  const defaultValues = [
+    "secret",
+    "your_jwt_secret",
+    "change_this_secret",
+    "your_jwt_secret_key_change_in_production",
+  ];
+  if (
+    secret.length < 32 ||
+    defaultValues.some((def) => secret.toLowerCase().includes(def))
+  ) {
+    console.warn(
+      "SECURITY WARNING: NODE_ENV is set to production but JWT_SECRET is short (<32 chars) or matches an example value!"
+    );
+  }
+}
+
 const app = express();
 const port = process.env.PORT || 5000;
-const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
-if (!process.env.MONGO_URI) {
-  throw new Error("MONGO_URI is not configured in backend/.env");
-}
+// Parse CLIENT_URL (comma-separated list of allowed origins)
+const allowedOrigins = (process.env.CLIENT_URL || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET is not configured in backend/.env");
-}
+// Security Headers
+app.use(helmet());
 
-const isProduction = process.env.NODE_ENV === "production";
-
-// CLIENT_URLS accepts a comma separated allowlist for multi-origin deployments.
-// CLIENT_URL is still honoured so existing single-origin setups keep working.
-const allowedOrigins = new Set(
-  (process.env.CLIENT_URLS || clientUrl)
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean)
-);
-
-const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-
+// Dynamic CORS configuration supporting multi-origin lists & HttpOnly cookies
 app.use(
   cors({
     origin(origin, callback) {
-      // Same-origin and non-browser callers (curl, health checks) send no
-      // Origin header and are not subject to CORS.
+      // Allow requests with no origin (curl, mobile apps, health checks)
       if (!origin) return callback(null, true);
-
-      if (allowedOrigins.has(origin)) return callback(null, true);
-
-      // Outside production, allow any loopback port. Vite moves off 5173 to
-      // 5174+ when the port is busy, and a hardcoded allowlist would otherwise
-      // block every request with no CORS header at all.
-      if (!isProduction && LOCAL_ORIGIN.test(origin)) {
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (
+        process.env.NODE_ENV !== "production" &&
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+      ) {
         return callback(null, true);
       }
-
       return callback(new Error(`Origin not allowed by CORS: ${origin}`));
     },
+    credentials: true,
   })
 );
+
+app.use(cookieParser());
 app.use(express.json());
 
-// express.json() only sets req.body when the request actually carries a
-// matching JSON body, so a PUT/POST with no body leaves it undefined. Any
-// `const { field } = req.body` in a controller then throws a TypeError that
-// the handler's catch turns into an opaque 500. Normalise it once here rather
-// than guarding every destructuring site.
+// Normalise body if payload is empty
 app.use((req, res, next) => {
   if (req.body === undefined || req.body === null) {
     req.body = {};
   }
-
   next();
 });
+
+// Global Rate Limiting: 300 requests per 15 minutes per IP
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many requests from this IP, please try again after 15 minutes.",
+  },
+});
+
+// Apply global rate limiter to all /api routes
+app.use("/api", globalLimiter);
 
 app.get("/", (req, res) => {
   res.json({
@@ -101,7 +132,6 @@ app.use("/api", (req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  // A rejected origin is a client configuration problem, not a server fault.
   if (err.message && err.message.startsWith("Origin not allowed by CORS:")) {
     return res.status(403).json({
       success: false,
@@ -109,7 +139,7 @@ app.use((err, req, res, next) => {
     });
   }
 
-  console.error("Unhandled error:", err);
+  console.error("Unhandled server error:", err);
 
   res.status(500).json({
     success: false,
@@ -120,21 +150,17 @@ app.use((err, req, res, next) => {
 connectDB()
   .then(() => {
     const server = app.listen(port, () => {
-      console.log(`Server running on http://localhost:${port}`);
+      console.log(`Server running on port ${port}`);
     });
 
-    // Release the port and the MongoDB connection so nodemon restarts and
-    // container restarts do not leak sockets or hang on a live connection.
     const shutdown = (signal) => async () => {
-      console.log(`${signal} received, shutting down`);
-
+      console.log(`${signal} received, shutting down gracefully`);
       server.close(async () => {
         try {
           await mongoose.connection.close();
         } catch (error) {
           console.error("Error closing MongoDB connection:", error.message);
         }
-
         process.exit(0);
       });
     };

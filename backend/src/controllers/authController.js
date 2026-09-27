@@ -11,9 +11,34 @@ const generateToken = (user) => {
     },
     process.env.JWT_SECRET,
     {
-      expiresIn: "1d",
+      expiresIn: process.env.JWT_EXPIRES_IN || "1d",
     }
   );
+};
+
+// Helper to attach HttpOnly, Secure, SameSite cookie
+const sendTokenCookie = (user, res, statusCode, message) => {
+  const token = generateToken(user);
+  const isProduction = process.env.NODE_ENV === "production";
+
+  const cookieOptions = {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "strict" : "lax",
+    maxAge: 24 * 60 * 60 * 1000, // 1 day
+  };
+
+  res.cookie("token", token, cookieOptions).status(statusCode).json({
+    success: true,
+    message,
+    token,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+  });
 };
 
 // Register
@@ -28,10 +53,10 @@ const register = async (req, res) => {
       });
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 6 characters long",
+        message: "Password must be at least 8 characters long",
       });
     }
 
@@ -55,23 +80,12 @@ const register = async (req, res) => {
       role: "employee",
     });
 
-    const token = generateToken(user);
-
-    res.status(201).json({
-      success: true,
-      message: "User registered successfully",
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    });
+    sendTokenCookie(user, res, 201, "User registered successfully");
   } catch (error) {
+    console.error("Error in authController.register:", error);
     res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Server error during registration",
     });
   }
 };
@@ -115,23 +129,36 @@ const login = async (req, res) => {
       });
     }
 
-    const token = generateToken(user);
+    sendTokenCookie(user, res, 200, "Login successful");
+  } catch (error) {
+    console.error("Error in authController.login:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error during login",
+    });
+  }
+};
+
+// Logout
+const logout = async (req, res) => {
+  try {
+    const isProduction = process.env.NODE_ENV === "production";
+    res.cookie("token", "", {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      expires: new Date(0),
+    });
 
     res.status(200).json({
       success: true,
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      message: "Logged out successfully",
     });
   } catch (error) {
+    console.error("Error in authController.logout:", error);
     res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Server error during logout",
     });
   }
 };
@@ -158,9 +185,10 @@ const getMe = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Error in authController.getMe:", error);
     res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Server error while fetching user profile",
     });
   }
 };
@@ -168,5 +196,6 @@ const getMe = async (req, res) => {
 module.exports = {
   register,
   login,
+  logout,
   getMe,
 };

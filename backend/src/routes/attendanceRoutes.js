@@ -1,4 +1,6 @@
 const express = require("express");
+const { query, param } = require("express-validator");
+const { handleValidationErrors } = require("../middleware/validate");
 
 const {
   checkIn,
@@ -13,12 +15,6 @@ const { protect, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-
-// ==========================================
-// EMPLOYEE ROUTES
-// ==========================================
-
-// Employee - Check in
 router.post(
   "/checkin",
   protect,
@@ -26,7 +22,6 @@ router.post(
   checkIn
 );
 
-// Employee - Check out
 router.post(
   "/checkout",
   protect,
@@ -34,45 +29,44 @@ router.post(
   checkOut
 );
 
-// Employee - View own attendance history
 router.get(
   "/my",
   protect,
   authorize("employee"),
+  [
+    query("month").optional().matches(/^\d{4}-\d{2}$/).withMessage("Month must be in YYYY-MM format"),
+    handleValidationErrors,
+  ],
   getMyAttendance
 );
 
-
-// ==========================================
-// SHARED ROUTES (Employee sees own, Admin/HR sees all)
-// ==========================================
-
-// Get today's attendance
 router.get(
   "/today",
   protect,
   getTodayAttendance
 );
 
-// Get monthly summary for an employee
 router.get(
   "/monthly-summary/:employeeId",
   protect,
+  [
+    param("employeeId").notEmpty().withMessage("Employee ID is required").trim(),
+    query("month").matches(/^\d{4}-\d{2}$/).withMessage("Month must be in YYYY-MM format"),
+    handleValidationErrors,
+  ],
   getMonthlySummary
 );
 
-
-// ==========================================
-// HR / ADMIN ROUTES
-// ==========================================
-
-// HR/Admin - View all attendance records
 router.get(
   "/",
   protect,
   authorize("admin", "hr"),
+  [
+    query("month").optional().matches(/^\d{4}-\d{2}$/).withMessage("Month must be in YYYY-MM format"),
+    query("status").optional().isIn(["Present", "Absent", "Late", "Half-day"]).withMessage("Invalid status filter"),
+    handleValidationErrors,
+  ],
   getAttendanceHistory
 );
-
 
 module.exports = router;

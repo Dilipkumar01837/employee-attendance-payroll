@@ -213,3 +213,194 @@ treatment of an explicit `Absent` record.
   rather than reusing a cached list, so backdated approvals are reflected immediately.
 - Deactivating an employee also deactivates their linked user account, so their existing
   token stops granting access.
+
+## Deploy checklist
+
+Before pushing code to production or deploying to your server environment, follow this verification checklist:
+
+### 1. Production Environment Variables
+
+#### Backend (`backend/.env`)
+```env
+PORT=5000
+MONGO_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<database>?retryWrites=true&w=majority
+JWT_SECRET=<secure_random_string_at_least_32_chars>
+JWT_EXPIRES_IN=1d
+CLIENT_URL=https://your-frontend-domain.com
+NODE_ENV=production
+```
+
+#### Frontend (`frontend/.env`)
+```env
+VITE_API_URL=https://your-backend-api-domain.com
+```
+
+### 2. Pre-deploy Build & Audit Verification
+
+Execute in `backend`:
+```bash
+cd backend
+npm run predeploy   # Runs npm audit --audit-level=high
+npm test            # Runs unit test suite
+```
+
+Execute in `frontend`:
+```bash
+cd frontend
+npm run predeploy   # Runs npm audit --audit-level=high and vite build
+```
+
+---
+
+### 3. API Smoke Tests (cURL Examples)
+
+#### Auth Endpoints
+
+1. **Health Check**
+```bash
+curl -X GET http://localhost:5000/api/health
+```
+
+2. **Register User**
+```bash
+curl -i -X POST http://localhost:5000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Deploy Test User","email":"deploytest@example.com","password":"SecurePassword123!"}'
+```
+
+3. **Login User (Returns HttpOnly Cookie)**
+```bash
+curl -i -c cookies.txt -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@test.com","password":"admin123password"}'
+```
+
+4. **Get Current User (`/me`)**
+```bash
+curl -i -b cookies.txt -X GET http://localhost:5000/api/auth/me
+```
+
+5. **Logout User**
+```bash
+curl -i -b cookies.txt -c cookies.txt -X POST http://localhost:5000/api/auth/logout
+```
+
+#### Employee Endpoints
+
+1. **Create Employee (Admin / HR)**
+```bash
+curl -i -b cookies.txt -X POST http://localhost:5000/api/employees \
+  -H "Content-Type: application/json" \
+  -d '{"employeeId":"EMP999","name":"Deploy Test","email":"deploytest@example.com","department":"Engineering","designation":"DevOps Engineer","phone":"1234567890","salary":85000,"dateOfJoining":"2026-01-01"}'
+```
+
+2. **Get All Employees**
+```bash
+curl -i -b cookies.txt -X GET http://localhost:5000/api/employees
+```
+
+3. **Get Employee by ID**
+```bash
+curl -i -b cookies.txt -X GET http://localhost:5000/api/employees/<EMPLOYEE_OBJECT_ID>
+```
+
+4. **Update Employee**
+```bash
+curl -i -b cookies.txt -X PUT http://localhost:5000/api/employees/<EMPLOYEE_OBJECT_ID> \
+  -H "Content-Type: application/json" \
+  -d '{"designation":"Senior DevOps Engineer","salary":95000}'
+```
+
+5. **Update Employee Status**
+```bash
+curl -i -b cookies.txt -X PATCH http://localhost:5000/api/employees/<EMPLOYEE_OBJECT_ID>/status \
+  -H "Content-Type: application/json" \
+  -d '{"status":"active"}'
+```
+
+#### Attendance Endpoints
+
+1. **Check In**
+```bash
+curl -i -b cookies.txt -X POST http://localhost:5000/api/attendance/checkin
+```
+
+2. **Check Out**
+```bash
+curl -i -b cookies.txt -X POST http://localhost:5000/api/attendance/checkout
+```
+
+3. **Get Today's Attendance**
+```bash
+curl -i -b cookies.txt -X GET http://localhost:5000/api/attendance/today
+```
+
+4. **Get My Attendance (Employee)**
+```bash
+curl -i -b cookies.txt -X GET "http://localhost:5000/api/attendance/my?month=2026-09"
+```
+
+5. **Get Monthly Summary**
+```bash
+curl -i -b cookies.txt -X GET "http://localhost:5000/api/attendance/monthly-summary/EMP999?month=2026-09"
+```
+
+#### Leave Endpoints
+
+1. **Apply Leave**
+```bash
+curl -i -b cookies.txt -X POST http://localhost:5000/api/leaves \
+  -H "Content-Type: application/json" \
+  -d '{"leaveType":"Casual","startDate":"2026-10-01","endDate":"2026-10-02","reason":"Personal work"}'
+```
+
+2. **Get My Leaves**
+```bash
+curl -i -b cookies.txt -X GET http://localhost:5000/api/leaves/my
+```
+
+3. **Get All Leaves (HR / Admin)**
+```bash
+curl -i -b cookies.txt -X GET http://localhost:5000/api/leaves
+```
+
+4. **Approve Leave**
+```bash
+curl -i -b cookies.txt -X PUT http://localhost:5000/api/leaves/<LEAVE_OBJECT_ID>/approve \
+  -H "Content-Type: application/json" \
+  -d '{"remarks":"Approved by HR"}'
+```
+
+5. **Reject Leave**
+```bash
+curl -i -b cookies.txt -X PUT http://localhost:5000/api/leaves/<LEAVE_OBJECT_ID>/reject \
+  -H "Content-Type: application/json" \
+  -d '{"remarks":"Rejected due to project deadlines"}'
+```
+
+#### Payroll Endpoints
+
+1. **Generate Payroll (Admin / HR)**
+```bash
+curl -i -b cookies.txt -X POST http://localhost:5000/api/payroll \
+  -H "Content-Type: application/json" \
+  -d '{"employee":"<EMPLOYEE_OBJECT_ID>","payrollMonth":"2026-09","basicSalary":85000,"allowances":5000,"deductions":2000}'
+```
+
+2. **Get All Payrolls**
+```bash
+curl -i -b cookies.txt -X GET http://localhost:5000/api/payroll
+```
+
+3. **Get My Payrolls (Employee)**
+```bash
+curl -i -b cookies.txt -X GET http://localhost:5000/api/payroll/my
+```
+
+4. **Update Payroll Status**
+```bash
+curl -i -b cookies.txt -X PATCH http://localhost:5000/api/payroll/<PAYROLL_OBJECT_ID>/status \
+  -H "Content-Type: application/json" \
+  -d '{"status":"Approved"}'
+```
+
