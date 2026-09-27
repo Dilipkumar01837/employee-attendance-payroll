@@ -50,6 +50,16 @@ if (process.env.NODE_ENV === "production") {
 const app = express();
 const port = process.env.PORT || 5000;
 
+// Middleware to ensure DB connection on serverless calls (Vercel Functions)
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Parse CLIENT_URL (comma-separated list of allowed origins)
 const allowedOrigins = (process.env.CLIENT_URL || "")
   .split(",")
@@ -63,7 +73,6 @@ app.use(helmet());
 app.use(
   cors({
     origin(origin, callback) {
-      // Allow requests with no origin (curl, mobile apps, health checks)
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
       if (
@@ -147,28 +156,32 @@ app.use((err, req, res, next) => {
   });
 });
 
-connectDB()
-  .then(() => {
-    const server = app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-    });
-
-    const shutdown = (signal) => async () => {
-      console.log(`${signal} received, shutting down gracefully`);
-      server.close(async () => {
-        try {
-          await mongoose.connection.close();
-        } catch (error) {
-          console.error("Error closing MongoDB connection:", error.message);
-        }
-        process.exit(0);
+if (require.main === module) {
+  connectDB()
+    .then(() => {
+      const server = app.listen(port, () => {
+        console.log(`Server running on port ${port}`);
       });
-    };
 
-    process.on("SIGINT", shutdown("SIGINT"));
-    process.on("SIGTERM", shutdown("SIGTERM"));
-  })
-  .catch((error) => {
-    console.error("Backend startup failed:", error.message);
-    process.exit(1);
-  });
+      const shutdown = (signal) => async () => {
+        console.log(`${signal} received, shutting down gracefully`);
+        server.close(async () => {
+          try {
+            await mongoose.connection.close();
+          } catch (error) {
+            console.error("Error closing MongoDB connection:", error.message);
+          }
+          process.exit(0);
+        });
+      };
+
+      process.on("SIGINT", shutdown("SIGINT"));
+      process.on("SIGTERM", shutdown("SIGTERM"));
+    })
+    .catch((error) => {
+      console.error("Backend startup failed:", error.message);
+      process.exit(1);
+    });
+}
+
+module.exports = app;

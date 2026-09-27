@@ -1,9 +1,6 @@
 const mongoose = require("mongoose");
 require("./dns");
 
-// A failed SRV lookup means the resolver could not answer, not that the cluster
-// is unreachable. `querySrv ECONNREFUSED` / `ENOTFOUND` on the `_mongodb._tcp`
-// name is the signature, and the fix is a resolver that supports SRV records.
 const isSRVResolutionFailure = (error) => {
   if (!error) return false;
   if (error.code === "querySrv" || error.code === "ECONNREFUSED") return true;
@@ -14,6 +11,10 @@ const isSRVResolutionFailure = (error) => {
 };
 
 const connectDB = async () => {
+  if (mongoose.connection.readyState >= 1) {
+    return;
+  }
+
   try {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB connected successfully");
