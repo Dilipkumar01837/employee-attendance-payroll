@@ -75,6 +75,7 @@ app.use(
     origin(origin, callback) {
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (/\.vercel\.app$/.test(origin)) return callback(null, true);
       if (
         process.env.NODE_ENV !== "production" &&
         /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
