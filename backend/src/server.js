@@ -16,16 +16,18 @@ const leaveRoutes = require("./routes/leaveRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
 
-// Explicit Env Validation - Exits process if MONGO_URI, JWT_SECRET, or CLIENT_URL is missing
-const requiredEnvs = ["MONGO_URI", "JWT_SECRET", "CLIENT_URL"];
+// Environment Validation - Log missing variables safely without crashing serverless imports
+const requiredEnvs = ["MONGO_URI", "JWT_SECRET"];
 const missingEnvs = requiredEnvs.filter((key) => !process.env[key]);
 if (missingEnvs.length > 0) {
   console.error(
-    `[FATAL STARTUP ERROR] Missing required environment variable(s): ${missingEnvs.join(
+    `[STARTUP WARNING] Missing environment variable(s): ${missingEnvs.join(
       ", "
     )}`
   );
-  process.exit(1);
+  if (require.main === module) {
+    process.exit(1);
+  }
 }
 
 // Startup check for insecure JWT_SECRET in production
