@@ -1,12 +1,56 @@
 const Employee = require("../models/Employee");
+const User = require("../models/User");
+
+// Only these fields may be written through the employee endpoints.
+// `user`, `isActive` and `employmentStatus` are deliberately excluded so a
+// client cannot link a record to an arbitrary account or flip the lifecycle
+// flags through the generic create/update payloads.
+const WRITABLE_FIELDS = [
+  "employeeId",
+  "name",
+  "email",
+  "department",
+  "designation",
+  "phone",
+  "salary",
+  "dateOfJoining",
+];
+
+const pickWritableFields = (body = {}) => {
+  const picked = {};
+
+  for (const field of WRITABLE_FIELDS) {
+    if (body[field] !== undefined) {
+      picked[field] = body[field];
+    }
+  }
+
+  if (picked.salary !== undefined) {
+    const salary = Number(picked.salary);
+
+    if (!Number.isFinite(salary) || salary < 0) {
+      const error = new Error("Salary must be a non-negative number");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    picked.salary = salary;
+  }
+
+  return picked;
+};
 
 // Create employee
 const createEmployee = async (req, res) => {
   try {
-    const employee = await Employee.create({
-      ...req.body,
-      dateOfJoining: req.body.dateOfJoining || req.body.joiningDate,
-    });
+    const payload = pickWritableFields(req.body);
+
+    // Accept the legacy alias without letting it bypass the whitelist.
+    if (!payload.dateOfJoining && req.body.joiningDate) {
+      payload.dateOfJoining = req.body.joiningDate;
+    }
+
+    const employee = await Employee.create(payload);
 
     res.status(201).json({
       success: true,
@@ -14,7 +58,7 @@ const createEmployee = async (req, res) => {
       data: employee,
     });
   } catch (error) {
-    res.status(400).json({
+    res.status(error.statusCode || 400).json({
       success: false,
       message: error.message,
     });
@@ -40,18 +84,45 @@ const getEmployees = async (req, res) => {
 
     const filter = {};
 
-    if (status) filter.employmentStatus = status;
+    if (status) {
+      // `employmentStatus` and `isActive` can disagree, because the generic
+      // update path never touched `isActive`. Filter on whichever flag is set so
+      // "active" cannot return a record that is inactive in the other field.
+      if (status === "active") {
+        filter.employmentStatus = "active";
+        filter.isActive = true;
+      } else if (status === "inactive") {
+        filter.$or = [
+          { employmentStatus: "inactive" },
+          { isActive: false },
+        ];
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Status must be active or inactive",
+        });
+      }
+    }
+
     if (department) filter.department = department;
     if (search) {
       const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const expression = new RegExp(escapedSearch, "i");
-      filter.$or = [
+      const textMatch = [
         { employeeId: expression },
         { name: expression },
         { email: expression },
         { department: expression },
         { designation: expression },
       ];
+
+      // $or may already carry the inactive clause, so combine with $and.
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: textMatch }];
+        delete filter.$or;
+      } else {
+        filter.$or = textMatch;
+      }
     }
 
     let query = Employee.find(filter);
@@ -123,11 +194,19 @@ const getEmployeeById = async (req, res) => {
 // Update employee
 const updateEmployee = async (req, res) => {
   try {
-    const update = { ...req.body };
-    if (update.joiningDate && !update.dateOfJoining) {
-      update.dateOfJoining = update.joiningDate;
+    const update = pickWritableFields(req.body);
+
+    // Accept the legacy alias without letting it bypass the whitelist.
+    if (!update.dateOfJoining && req.body.joiningDate) {
+      update.dateOfJoining = req.body.joiningDate;
     }
-    delete update.joiningDate;
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No updatable fields were provided",
+      });
+    }
 
     const employee = await Employee.findByIdAndUpdate(
       req.params.id,
@@ -160,11 +239,23 @@ const updateEmployee = async (req, res) => {
 
 const updateEmployeeStatus = async (req, res) => {
   try {
+    const { status } = req.body;
+
+    // Guard the enum before writing. Without this an absent or misspelt body
+    // evaluated `undefined === "active"` as false and silently deactivated the
+    // employee instead of returning a validation error.
+    if (status !== "active" && status !== "inactive") {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be active or inactive",
+      });
+    }
+
     const employee = await Employee.findByIdAndUpdate(
       req.params.id,
       {
-        employmentStatus: req.body.status,
-        isActive: req.body.status === "active",
+        employmentStatus: status,
+        isActive: status === "active",
       },
       { new: true, runValidators: true }
     );
@@ -199,6 +290,15 @@ const deleteEmployee = async (req, res) => {
         success: false,
         message: "Employee not found",
       });
+    }
+
+    // Removing the employee record must also revoke the linked login, otherwise
+    // the account stays active and can still authenticate against the API.
+    if (employee.user) {
+      await User.updateOne(
+        { _id: employee.user },
+        { $set: { isActive: false } }
+      );
     }
 
     res.status(200).json({

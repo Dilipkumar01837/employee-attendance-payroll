@@ -34,8 +34,6 @@ function Payroll({ user }) {
     } catch (err) {
       setError(err.message);
     } finally {
-      // The request lifecycle controls this loading indicator.
-      // oxlint-disable-next-line react(set-state-in-effect)
       setLoading(false);
     }
   }, [isAdminOrHR]);
@@ -53,6 +51,7 @@ function Payroll({ user }) {
   }, [isAdminOrHR]);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
     loadPayrolls();
     loadEmployees();
   }, [loadEmployees, loadPayrolls]);

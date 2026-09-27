@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Local environment files. Listed here as well as in the repo root ignore so
+# this directory is safe on its own.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

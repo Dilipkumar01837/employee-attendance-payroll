@@ -2,23 +2,15 @@ const Attendance = require("../models/Attendance");
 const Employee = require("../models/Employee");
 const Leave = require("../models/Leave");
 const { formatInTimeZone } = require("date-fns-tz");
-
-const IST_TIMEZONE = "Asia/Kolkata";
-
-const getISTDate = (date = new Date()) => {
-  return formatInTimeZone(date, IST_TIMEZONE, "yyyy-MM-dd");
-};
-
-const getISTMonthBounds = (year, month) => {
-  const start = new Date(`${year}-${String(month).padStart(2, "0")}-01T00:00:00+05:30`);
-  const lastDay = new Date(year, month, 0).getDate();
-  const end = new Date(`${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}T23:59:59.999+05:30`);
-  return { start, end };
-};
-
-const getDaysInMonth = (year, month) => {
-  return new Date(year, month, 0).getDate();
-};
+const {
+  IST_TIMEZONE,
+  getDaysInMonth,
+  getISTDateString,
+  getISTMonthBounds,
+  isValidMonth,
+  parseMonth,
+} = require("../utils/dateUtils");
+const { computeAttendanceSummary } = require("../utils/payrollMath");
 
 const resolveEmployee = async (userId, email) => {
   let employee = await Employee.findOne({ user: userId });
@@ -48,7 +40,7 @@ const checkIn = async (req, res) => {
       });
     }
 
-    const todayStr = getISTDate();
+    const todayStr = getISTDateString();
     const todayDate = new Date(`${todayStr}T00:00:00+05:30`);
 
     const existing = await Attendance.findOne({
@@ -110,7 +102,7 @@ const checkOut = async (req, res) => {
       });
     }
 
-    const todayStr = getISTDate();
+    const todayStr = getISTDateString();
     const todayDate = new Date(`${todayStr}T00:00:00+05:30`);
 
     const attendance = await Attendance.findOne({
@@ -162,7 +154,7 @@ const checkOut = async (req, res) => {
 
 const getTodayAttendance = async (req, res) => {
   try {
-    const todayStr = getISTDate();
+    const todayStr = getISTDateString();
     const todayDate = new Date(`${todayStr}T00:00:00+05:30`);
 
     if (req.user.role === "admin" || req.user.role === "hr") {
@@ -216,14 +208,14 @@ const getMyAttendance = async (req, res) => {
 
     const { month } = req.query;
 
-    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+    if (!isValidMonth(month)) {
       return res.status(400).json({
         success: false,
         message: "Month parameter is required in YYYY-MM format",
       });
     }
 
-    const [year, monthNum] = month.split("-").map(Number);
+    const { year, month: monthNum } = parseMonth(month);
     const { start, end } = getISTMonthBounds(year, monthNum);
 
     const records = await Attendance.find({
@@ -259,14 +251,14 @@ const getAttendanceHistory = async (req, res) => {
     }
 
     if (month) {
-      if (!/^\d{4}-\d{2}$/.test(month)) {
+      if (!isValidMonth(month)) {
         return res.status(400).json({
           success: false,
           message: "Month must be in YYYY-MM format",
         });
       }
 
-      const [year, monthNum] = month.split("-").map(Number);
+      const { year, month: monthNum } = parseMonth(month);
       const { start, end } = getISTMonthBounds(year, monthNum);
       filter.date = { $gte: start, $lte: end };
     }
@@ -291,7 +283,7 @@ const getMonthlySummary = async (req, res) => {
     const { employeeId } = req.params;
     const { month } = req.query;
 
-    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+    if (!isValidMonth(month)) {
       return res.status(400).json({
         success: false,
         message: "Month parameter is required in YYYY-MM format",
@@ -328,29 +320,13 @@ const getMonthlySummary = async (req, res) => {
       }
     }
 
-    const [year, monthNum] = month.split("-").map(Number);
-    const { start, end } = getISTMonthBounds(year, monthNum);
-    const daysInMonth = getDaysInMonth(year, monthNum);
+    const { year, month: monthNumber } = parseMonth(month);
+    const { start, end } = getISTMonthBounds(year, monthNumber);
+    const daysInMonth = getDaysInMonth(year, monthNumber);
 
     const records = await Attendance.find({
       employeeId: targetEmployeeId,
       date: { $gte: start, $lte: end },
-    });
-
-    let presentDays = 0;
-    let absentDays = 0;
-    let lateDays = 0;
-    let halfDays = 0;
-    let totalHours = 0;
-
-    records.forEach((record) => {
-      if (record.status === "Present") presentDays++;
-      else if (record.status === "Late") lateDays++;
-      else if (record.status === "Half-day") halfDays++;
-
-      if (record.totalHours != null) {
-        totalHours += record.totalHours;
-      }
     });
 
     const approvedLeaves = await Leave.find({
@@ -360,37 +336,21 @@ const getMonthlySummary = async (req, res) => {
       endDate: { $gte: start },
     });
 
-    let leaveDays = 0;
-    approvedLeaves.forEach((leave) => {
-      const leaveStart = leave.startDate < start ? start : leave.startDate;
-      const leaveEnd = leave.endDate > end ? end : leave.endDate;
-      const msPerDay = 1000 * 60 * 60 * 24;
-      leaveDays += Math.floor((leaveEnd - leaveStart) / msPerDay) + 1;
+    // A day is absent only if it has neither an attendance record nor approved
+    // leave, so a day that is both attended and on leave is not counted twice.
+    const summary = computeAttendanceSummary({
+      employeeId: targetEmployeeId,
+      month,
+      windowStart: start,
+      windowEnd: end,
+      daysInMonth,
+      records,
+      leaves: approvedLeaves,
     });
-
-    const daysWithRecords = records.length;
-    absentDays = daysInMonth - daysWithRecords - leaveDays;
-    if (absentDays < 0) absentDays = 0;
-
-    const attendanceDays = presentDays + lateDays + halfDays;
-    const percentage = daysInMonth > 0
-      ? parseFloat(((attendanceDays / daysInMonth) * 100).toFixed(1))
-      : 0;
 
     return res.status(200).json({
       success: true,
-      data: {
-        employeeId: targetEmployeeId,
-        month,
-        totalDays: daysInMonth,
-        presentDays,
-        lateDays,
-        halfDays,
-        absentDays,
-        leaveDays,
-        totalHours: parseFloat(totalHours.toFixed(2)),
-        attendancePercentage: percentage,
-      },
+      data: summary,
     });
   } catch (error) {
     return res.status(500).json({

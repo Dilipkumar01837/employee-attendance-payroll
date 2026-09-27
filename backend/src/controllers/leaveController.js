@@ -1,6 +1,31 @@
 const Leave = require("../models/Leave");
 const Employee = require("../models/Employee");
 const User = require("../models/User");
+const {
+  getISTMonthBounds,
+  isValidMonth,
+  parseMonth,
+} = require("../utils/dateUtils");
+const { buildLeaveDaySets } = require("../utils/payrollMath");
+
+// Resolve the employee record behind the authenticated user. Never trust an
+// employee identifier supplied by the client. The `user` reference is
+// authoritative; the email fallback keeps older records that predate the link.
+const resolveEmployeeForUser = async (userId) => {
+  let employee = await Employee.findOne({ user: userId });
+
+  if (!employee) {
+    const user = await User.findById(userId);
+
+    if (user) {
+      employee = await Employee.findOne({
+        email: user.email.toLowerCase(),
+      });
+    }
+  }
+
+  return employee;
+};
 
 // Apply for leave
 const applyLeave = async (req, res) => {
@@ -23,18 +48,7 @@ const applyLeave = async (req, res) => {
 
     // Link the leave request to the logged-in user's employee record.
     // The employee ID is derived from the authenticated user, never from the body.
-    const user = await User.findById(req.user.id);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    const employee = await Employee.findOne({
-      email: user.email.toLowerCase(),
-    });
+    const employee = await resolveEmployeeForUser(req.user.id);
 
     if (!employee) {
       return res.status(400).json({
@@ -116,18 +130,7 @@ const getMyLeaves = async (req, res) => {
   try {
     // Derive the employee record from the authenticated user,
     // never from a client-supplied employee ID.
-    const user = await User.findById(req.user.id);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    const employee = await Employee.findOne({
-      email: user.email.toLowerCase(),
-    });
+    const employee = await resolveEmployeeForUser(req.user.id);
 
     if (!employee) {
       return res.status(404).json({
@@ -312,7 +315,7 @@ const getApprovedLeaveDaysForPayroll = async (req, res) => {
     }
 
     // Expected format: YYYY-MM
-    if (!/^\d{4}-\d{2}$/.test(month)) {
+    if (!isValidMonth(month)) {
       return res.status(400).json({
         success: false,
         message: "Month must be in YYYY-MM format",
@@ -328,18 +331,11 @@ const getApprovedLeaveDaysForPayroll = async (req, res) => {
       });
     }
 
-    const [year, monthNumber] = month.split("-").map(Number);
-
-    // Validate month
-    if (monthNumber < 1 || monthNumber > 12) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid month",
-      });
-    }
-
-    const monthStart = new Date(Date.UTC(year, monthNumber - 1, 1));
-    const monthEnd = new Date(Date.UTC(year, monthNumber, 0));
+    const { year, month: monthNumber } = parseMonth(month);
+    const { start: monthStart, end: monthEnd } = getISTMonthBounds(
+      year,
+      monthNumber
+    );
 
     const leaves = await Leave.find({
       employeeId,
@@ -348,22 +344,10 @@ const getApprovedLeaveDaysForPayroll = async (req, res) => {
       endDate: { $gte: monthStart },
     });
 
-    let approvedLeaveDays = 0;
-
-    leaves.forEach((leave) => {
-      const leaveStart =
-        leave.startDate < monthStart ? monthStart : leave.startDate;
-
-      const leaveEnd =
-        leave.endDate > monthEnd ? monthEnd : leave.endDate;
-
-      const millisecondsPerDay = 1000 * 60 * 60 * 24;
-
-      const days =
-        Math.floor((leaveEnd - leaveStart) / millisecondsPerDay) + 1;
-
-      approvedLeaveDays += days;
-    });
+    // Count distinct IST calendar days so overlapping requests are not double
+    // counted and a leave spanning a month end is still exact.
+    const { allDays } = buildLeaveDaySets(leaves, monthStart, monthEnd);
+    const approvedLeaveDays = allDays.size;
 
     return res.status(200).json({
       success: true,

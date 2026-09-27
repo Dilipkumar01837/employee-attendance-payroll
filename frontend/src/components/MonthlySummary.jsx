@@ -1,53 +1,62 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import { getCurrentISTMonth } from "../services/datetime";
 
 function MonthlySummary({ employees, user, onError }) {
-  const getCurrentMonth = () => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  };
-
-  const [month, setMonth] = useState(getCurrentMonth);
+  const [month, setMonth] = useState(getCurrentISTMonth);
   const [employeeId, setEmployeeId] = useState("");
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const isEmployee = user.role === "employee";
+
+  // An employee can only ever view their own record, so resolve it from the
+  // directory during render instead of writing it back through an effect.
+  const ownEmployee =
+    isEmployee && employees.length > 0
+      ? employees.find((employee) => employee.email === user.email) ||
+        employees.find(
+          (employee) =>
+            employee.user && String(employee.user) === String(user.id)
+        )
+      : null;
+
+  const effectiveEmployeeId = isEmployee
+    ? (ownEmployee?.employeeId ?? "")
+    : employeeId;
+
   useEffect(() => {
-    if (user.role === "employee" && employees.length > 0) {
-      const own =
-        employees.find((e) => e.email === user.email) ||
-        employees.find((e) => e.user && String(e.user) === String(user.id));
+    if (!effectiveEmployeeId) return;
 
-      if (own) {
-        setEmployeeId(own.employeeId);
-      }
-    }
-  }, [employees, user]);
+    let cancelled = false;
 
-  const loadSummary = async () => {
-    if (!employeeId) return;
-
+    // The month and employee pickers own the fetch.
+    // oxlint-disable-next-line react/set-state-in-effect
     setLoading(true);
     onError("");
 
-    try {
-      const data = await api(
-        `/api/attendance/monthly-summary/${encodeURIComponent(employeeId)}?month=${encodeURIComponent(month)}`
-      );
-      setSummary(data.data || null);
-    } catch (err) {
-      onError(err.message);
-      setSummary(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+    api(
+      `/api/attendance/monthly-summary/${encodeURIComponent(
+        effectiveEmployeeId
+      )}?month=${encodeURIComponent(month)}`
+    )
+      .then((data) => {
+        if (cancelled) return;
+        setSummary(data.data || null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        onError(err.message);
+        setSummary(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-  useEffect(() => {
-    if (employeeId) {
-      loadSummary();
-    }
-  }, [employeeId, month]);
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveEmployeeId, month, onError]);
 
   return (
     <section className="records-section">
@@ -58,7 +67,7 @@ function MonthlySummary({ employees, user, onError }) {
         </div>
 
         <div className="month-selector">
-          {(user.role === "admin" || user.role === "hr") && (
+          {!isEmployee && (
             <select
               value={employeeId}
               onChange={(event) => setEmployeeId(event.target.value)}
@@ -105,19 +114,23 @@ function MonthlySummary({ employees, user, onError }) {
           </div>
 
           <div className="summary-card">
-            <span className="summary-value">{summary.totalHours != null ? `${summary.totalHours}h` : "--"}</span>
+            <span className="summary-value">
+              {summary.totalHours != null ? `${summary.totalHours}h` : "--"}
+            </span>
             <span className="summary-label">Total Hours</span>
           </div>
 
           <div className="summary-card highlight">
-            <span className="summary-value">{summary.attendancePercentage}%</span>
+            <span className="summary-value">
+              {summary.attendancePercentage}%
+            </span>
             <span className="summary-label">Attendance</span>
           </div>
         </div>
       ) : (
         <div className="empty-state">
-          {!employeeId
-            ? user.role === "employee"
+          {!effectiveEmployeeId
+            ? isEmployee
               ? "No employee record is linked to your account. Contact HR/Admin."
               : "Select an employee to view summary."
             : "No summary data available for this month."}

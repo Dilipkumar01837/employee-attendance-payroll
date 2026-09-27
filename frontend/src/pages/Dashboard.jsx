@@ -2,22 +2,13 @@ import { Doughnut } from 'react-chartjs-2';
 import PageHeader from '../components/PageHeader';
 import {
   Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
   ArcElement,
   Tooltip,
   Legend,
 } from 'chart.js';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  Tooltip,
-  Legend
-);
+// Only a doughnut is rendered, so only its building blocks are registered.
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 function Dashboard({ user, employees = [], leaves = [], onOpenApplyLeave }) {
   const activeEmployees = employees.filter(

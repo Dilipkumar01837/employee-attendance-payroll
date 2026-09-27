@@ -1,59 +1,43 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import api from "../services/api";
+import { formatISTDate, formatISTTime, getCurrentISTMonth } from "../services/datetime";
 
 function AttendanceManagement({ employees, onError }) {
-  const getCurrentMonth = () => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  };
-
-  const [month, setMonth] = useState(getCurrentMonth);
+  const [month, setMonth] = useState(getCurrentISTMonth);
   const [employeeIdFilter, setEmployeeIdFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const loadRecords = async () => {
-    setLoading(true);
-    onError("");
+  const loadRecords = useCallback(
+    async (targetMonth, targetEmployeeId, targetStatus) => {
+      setLoading(true);
+      onError("");
 
-    try {
-      const params = new URLSearchParams();
-      if (month) params.append("month", month);
-      if (employeeIdFilter) params.append("employeeId", employeeIdFilter);
-      if (statusFilter) params.append("status", statusFilter);
+      try {
+        const params = new URLSearchParams();
+        if (targetMonth) params.append("month", targetMonth);
+        if (targetEmployeeId) {
+          params.append("employeeId", targetEmployeeId);
+        }
+        if (targetStatus) params.append("status", targetStatus);
 
-      const data = await api(`/api/attendance?${params.toString()}`);
-      setRecords(data.data || []);
-    } catch (err) {
-      onError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+        const data = await api(`/api/attendance?${params.toString()}`);
+        setRecords(data.data || []);
+      } catch (err) {
+        onError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [onError]
+  );
 
   useEffect(() => {
-    loadRecords();
-  }, [month, employeeIdFilter, statusFilter]);
-
-  const formatTime = (dateStr) => {
-    if (!dateStr) return "--:--";
-    return new Date(dateStr).toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: "Asia/Kolkata",
-    });
-  };
-
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString("en-IN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      timeZone: "Asia/Kolkata",
-    });
-  };
+    // The filters own the fetch, so reload from the events that changed them.
+    // oxlint-disable-next-line react/set-state-in-effect
+    loadRecords(month, employeeIdFilter, statusFilter);
+  }, [employeeIdFilter, loadRecords, month, statusFilter]);
 
   return (
     <section className="records-section">
@@ -65,7 +49,9 @@ function AttendanceManagement({ employees, onError }) {
 
         <button
           className="secondary-button"
-          onClick={loadRecords}
+          onClick={() =>
+            loadRecords(month, employeeIdFilter, statusFilter)
+          }
           type="button"
         >
           Refresh
@@ -119,9 +105,9 @@ function AttendanceManagement({ employees, onError }) {
           {records.map((record) => (
             <div className="management-table-row" key={record._id}>
               <span className="record-id">{record.employeeId}</span>
-              <span>{formatDate(record.date)}</span>
-              <span>{formatTime(record.checkIn)}</span>
-              <span>{formatTime(record.checkOut)}</span>
+              <span>{formatISTDate(record.date)}</span>
+              <span>{formatISTTime(record.checkIn)}</span>
+              <span>{formatISTTime(record.checkOut)}</span>
               <span>{record.totalHours != null ? `${record.totalHours}h` : "--"}</span>
               <span className={`attendance-status-badge status-${record.status.toLowerCase()}`}>
                 {record.status}

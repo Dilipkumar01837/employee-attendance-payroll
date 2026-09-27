@@ -1,12 +1,15 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Attendance, leave and payroll API for the employee management workspace",
+  "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed": "node scripts/createTestData.js"
+    "seed": "node scripts/createTestData.js",
+    "test": "node --test",
+    "lint": "node scripts/lint.js",
+    "smoke": "node scripts/smokeTest.js"
   },
   "keywords": [],
   "author": "",

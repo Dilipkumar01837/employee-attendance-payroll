@@ -1,25 +1,29 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import api from "../services/api";
+import { formatISTTime } from "../services/datetime";
 
 function CheckInCard({ onError, onSuccess }) {
   const [record, setRecord] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const loadToday = async () => {
+  const loadToday = useCallback(async () => {
     try {
       const data = await api("/api/attendance/today");
-      setRecord(Array.isArray(data.data) ? data.data[0] ?? null : data.data || null);
+      setRecord(
+        Array.isArray(data.data) ? (data.data[0] ?? null) : data.data || null
+      );
     } catch (err) {
       onError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [onError]);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
     loadToday();
-  }, []);
+  }, [loadToday]);
 
   const handleCheckIn = async () => {
     setSubmitting(true);
@@ -69,39 +73,29 @@ function CheckInCard({ onError, onSuccess }) {
     );
   }
 
-  const formatTime = (dateStr) => {
-    if (!dateStr) return "--:--";
-    return new Date(dateStr).toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: "Asia/Kolkata",
-    });
-  };
-
-  const today = new Date().toLocaleDateString("en-IN", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "Asia/Kolkata",
-  });
-
   return (
     <div className="checkin-card">
-      <div className="checkin-date">{today}</div>
+      <div className="checkin-date">
+        {new Date().toLocaleDateString("en-IN", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          timeZone: "Asia/Kolkata",
+        })}
+      </div>
 
       {record ? (
         <div className="checkin-status">
           <div className="checkin-times">
             <div className="time-block">
               <span className="time-label">Check In</span>
-              <span className="time-value">{formatTime(record.checkIn)}</span>
+              <span className="time-value">{formatISTTime(record.checkIn)}</span>
             </div>
 
             <div className="time-block">
               <span className="time-label">Check Out</span>
-              <span className="time-value">{formatTime(record.checkOut)}</span>
+              <span className="time-value">{formatISTTime(record.checkOut)}</span>
             </div>
 
             <div className="time-block">
@@ -112,7 +106,9 @@ function CheckInCard({ onError, onSuccess }) {
             </div>
           </div>
 
-          <span className={`attendance-status-badge status-${record.status.toLowerCase()}`}>
+          <span
+            className={`attendance-status-badge status-${record.status.toLowerCase()}`}
+          >
             {record.status}
           </span>
 

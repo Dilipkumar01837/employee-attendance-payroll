@@ -1,55 +1,36 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import api from "../services/api";
+import { formatISTDate, formatISTTime, getCurrentISTMonth } from "../services/datetime";
 
 function AttendanceHistory({ onError }) {
-  const getCurrentMonth = () => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  };
-
-  const [month, setMonth] = useState(getCurrentMonth);
+  const [month, setMonth] = useState(getCurrentISTMonth);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const loadHistory = async () => {
-    setLoading(true);
-    onError("");
+  const loadHistory = useCallback(
+    async (targetMonth) => {
+      setLoading(true);
+      onError("");
 
-    try {
-      const data = await api(
-        `/api/attendance/my?month=${encodeURIComponent(month)}`
-      );
-      setRecords(data.data || []);
-    } catch (err) {
-      onError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        const data = await api(
+          `/api/attendance/my?month=${encodeURIComponent(targetMonth)}`
+        );
+        setRecords(data.data || []);
+      } catch (err) {
+        onError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [onError]
+  );
 
   useEffect(() => {
-    loadHistory();
-  }, [month]);
-
-  const formatTime = (dateStr) => {
-    if (!dateStr) return "--:--";
-    return new Date(dateStr).toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: "Asia/Kolkata",
-    });
-  };
-
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString("en-IN", {
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      timeZone: "Asia/Kolkata",
-    });
-  };
+    // The month input owns the fetch, so reload from the event that changed it.
+    // oxlint-disable-next-line react/set-state-in-effect
+    loadHistory(month);
+  }, [loadHistory, month]);
 
   return (
     <section className="records-section">
@@ -75,7 +56,7 @@ function AttendanceHistory({ onError }) {
           {records.map((record) => (
             <article className="attendance-card" key={record._id}>
               <div className="attendance-card-header">
-                <strong>{formatDate(record.date)}</strong>
+                <strong>{formatISTDate(record.date)}</strong>
 
                 <span className={`attendance-status-badge status-${record.status.toLowerCase()}`}>
                   {record.status}
@@ -85,12 +66,12 @@ function AttendanceHistory({ onError }) {
               <div className="attendance-card-details">
                 <div className="detail-item">
                   <span className="detail-label">Check In</span>
-                  <span className="detail-value">{formatTime(record.checkIn)}</span>
+                  <span className="detail-value">{formatISTTime(record.checkIn)}</span>
                 </div>
 
                 <div className="detail-item">
                   <span className="detail-label">Check Out</span>
-                  <span className="detail-value">{formatTime(record.checkOut)}</span>
+                  <span className="detail-value">{formatISTTime(record.checkOut)}</span>
                 </div>
 
                 <div className="detail-item">

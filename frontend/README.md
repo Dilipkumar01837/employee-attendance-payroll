@@ -1,16 +1,42 @@
-# React + Vite
+# Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React client for the employee attendance and payroll system. See the
+[repository README](../README.md) for setup, roles, and the attendance/payroll rules.
 
-Currently, two official plugins are available:
+## Commands
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev      # Vite dev server, default http://localhost:5173
+npm run build    # production build into dist/
+npm run lint     # oxlint
+npm run preview  # serve the production build
+```
 
-## React Compiler
+## Configuration
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VITE_API_URL` | `http://localhost:5000` | Base URL of the API |
 
-## Expanding the Oxlint configuration
+The backend's `CLIENT_URLS` allowlist must include the origin you serve this from. It
+matches exact origins, so `http://localhost:5174` is not covered by an entry for
+`http://localhost:5173`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Layout
+
+| Path | Purpose |
+| --- | --- |
+| `src/pages/` | Route-level screens, including `Dashboard.jsx` |
+| `src/components/` | Reusable UI, including the attendance and payroll views |
+| `src/services/api.js` | Configured Axios client, attaches the auth token |
+| `src/services/datetime.js` | IST date, time, and month helpers |
+
+## Timezone handling
+
+`src/services/datetime.js` is the only place this app formats a date for display.
+It formats through `Intl.DateTimeFormat` with `timeZone: "Asia/Kolkata"`, matching how
+the API buckets records, and exports `getCurrentISTMonth` for the month pickers. Avoid
+calling `toLocaleDateString()` without a `timeZone` on its own in a new component;
+without it the same record renders differently depending on the viewer's machine
+settings.

@@ -64,12 +64,12 @@ function EmployeeManagement({ user, onEmployeesChanged }) {
         setError(err.message);
       }
     } finally {
-      // oxlint-disable-next-line react(set-state-in-effect)
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
     loadEmployees();
   }, [loadEmployees]);
 

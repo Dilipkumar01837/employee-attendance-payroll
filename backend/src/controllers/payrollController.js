@@ -2,6 +2,14 @@ const Payroll = require("../models/Payroll");
 const Leave = require("../models/Leave");
 const Attendance = require("../models/Attendance");
 const Employee = require("../models/Employee");
+const User = require("../models/User");
+const {
+  getDaysInMonth,
+  getISTMonthBounds,
+  isValidMonth,
+  parseMonth,
+} = require("../utils/dateUtils");
+const { computePayrollSummary } = require("../utils/payrollMath");
 
 // =========================================================
 // Generate Payroll
@@ -34,7 +42,7 @@ const generatePayroll = async (req, res) => {
     // ---------------------------------------------------------
     // Validate payroll month format
     // ---------------------------------------------------------
-    if (!/^\d{4}-\d{2}$/.test(payrollMonth)) {
+    if (!isValidMonth(payrollMonth)) {
       return res.status(400).json({
         success: false,
         message:
@@ -42,15 +50,7 @@ const generatePayroll = async (req, res) => {
       });
     }
 
-    const [year, monthNumber] =
-      payrollMonth.split("-").map(Number);
-
-    if (monthNumber < 1 || monthNumber > 12) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid payroll month",
-      });
-    }
+    const { year, month: monthNumber } = parseMonth(payrollMonth);
 
     // ---------------------------------------------------------
     // Validate salary values
@@ -81,7 +81,20 @@ const generatePayroll = async (req, res) => {
     // ---------------------------------------------------------
     // Find employee
     // ---------------------------------------------------------
-    const employeeRecord = await Employee.findById(employee);
+    let employeeRecord;
+
+    try {
+      employeeRecord = await Employee.findById(employee);
+    } catch (error) {
+      if (error.name === "CastError") {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid employee identifier",
+        });
+      }
+
+      throw error;
+    }
 
     if (!employeeRecord) {
       return res.status(404).json({
@@ -94,7 +107,7 @@ const generatePayroll = async (req, res) => {
     // Prevent duplicate payroll
     // ---------------------------------------------------------
     const existingPayroll = await Payroll.findOne({
-      employee,
+      employee: employeeRecord._id,
       payrollMonth,
     });
 
@@ -110,69 +123,24 @@ const generatePayroll = async (req, res) => {
     // DATE RANGE FOR PAYROLL MONTH
     // =========================================================
 
-    const monthStart = new Date(
-      `${payrollMonth}-01T00:00:00+05:30`
-    );
-
-    const nextMonthStart =
-      monthNumber === 12
-        ? new Date(
-            `${year + 1}-01-01T00:00:00+05:30`
-          )
-        : new Date(
-            `${year}-${String(monthNumber + 1).padStart(
-              2,
-              "0"
-            )}-01T00:00:00+05:30`
-          );
-
-    const daysInMonth = new Date(
+    const { start: monthStart, end: monthEnd } = getISTMonthBounds(
       year,
-      monthNumber,
-      0
-    ).getDate();
-
-    const monthEnd = new Date(
-      `${payrollMonth}-${String(daysInMonth).padStart(
-        2,
-        "0"
-      )}T23:59:59.999+05:30`
+      monthNumber
     );
+
+    const daysInMonth = getDaysInMonth(year, monthNumber);
 
     // =========================================================
-    // ATTENDANCE INTEGRATION
+    // ATTENDANCE AND APPROVED LEAVE INPUTS
     // =========================================================
 
     const attendanceRecords = await Attendance.find({
       employeeId: employeeRecord.employeeId,
       date: {
         $gte: monthStart,
-        $lt: nextMonthStart,
+        $lte: monthEnd,
       },
     });
-
-    let presentDays = 0;
-    let lateDays = 0;
-    let halfDays = 0;
-
-    attendanceRecords.forEach((record) => {
-      if (record.status === "Present") {
-        presentDays++;
-      } else if (record.status === "Late") {
-        lateDays++;
-      } else if (record.status === "Half-day") {
-        halfDays++;
-      }
-    });
-
-    const attendanceDays =
-      presentDays +
-      lateDays +
-      halfDays;
-
-    // =========================================================
-    // APPROVED LEAVE INTEGRATION
-    // =========================================================
 
     const leaves = await Leave.find({
       employeeId: employeeRecord.employeeId,
@@ -188,59 +156,12 @@ const generatePayroll = async (req, res) => {
       },
     });
 
-    let approvedLeaveDays = 0;
-    let unpaidLeaveDays = 0;
-
-    leaves.forEach((leave) => {
-      // Limit leave dates to the payroll month
-      const leaveStart =
-        leave.startDate < monthStart
-          ? monthStart
-          : leave.startDate;
-
-      const leaveEnd =
-        leave.endDate > monthEnd
-          ? monthEnd
-          : leave.endDate;
-
-      const millisecondsPerDay =
-        1000 * 60 * 60 * 24;
-
-      const days =
-        Math.floor(
-          (leaveEnd - leaveStart) /
-            millisecondsPerDay
-        ) + 1;
-
-      approvedLeaveDays += days;
-
-      // "Other" approved leave is treated as unpaid
-      if (leave.leaveType === "Other") {
-        unpaidLeaveDays += days;
-      }
-    });
-
-    // =========================================================
-    // ATTENDANCE SUMMARY
-    // =========================================================
-
-    const absentDays = Math.max(
-      0,
-      daysInMonth -
-        attendanceDays -
-        approvedLeaveDays
-    );
-
-    const workingDays =
-      attendanceDays + absentDays;
-
     // =========================================================
     // SALARY CALCULATION
     // =========================================================
 
     // Gross = Basic + Allowances
-    const grossSalary =
-      basic + allowanceAmount;
+    const grossSalary = basic + allowanceAmount;
 
     // Deductions cannot be greater than gross salary
     if (deductionAmount > grossSalary) {
@@ -251,34 +172,25 @@ const generatePayroll = async (req, res) => {
       });
     }
 
-    // Salary for one calendar day
-    const perDaySalary =
-      daysInMonth > 0
-        ? grossSalary / daysInMonth
-        : 0;
-
-    // Deduction for unpaid "Other" leave
-    const leaveDeduction =
-      Math.round(
-        perDaySalary *
-          unpaidLeaveDays *
-          100
-      ) / 100;
-
-    // Net = Gross - Deductions - Leave Deduction
-    const netSalary = Math.max(
-      0,
-      grossSalary -
-        deductionAmount -
-        leaveDeduction
-    );
+    // Attendance, leave and net salary all derive from IST calendar days so a
+    // day that is both attended and covered by approved leave is counted once.
+    const summary = computePayrollSummary({
+      windowStart: monthStart,
+      windowEnd: monthEnd,
+      daysInMonth,
+      records: attendanceRecords,
+      leaves,
+      basic,
+      allowances: allowanceAmount,
+      deductions: deductionAmount,
+    });
 
     // =========================================================
     // CREATE PAYROLL
     // =========================================================
 
     const payroll = await Payroll.create({
-      employee,
+      employee: employeeRecord._id,
       payrollMonth,
 
       basicSalary: basic,
@@ -287,24 +199,15 @@ const generatePayroll = async (req, res) => {
 
       deductions: deductionAmount,
 
-      attendanceSummary: {
-        workingDays,
-        presentDays,
-        absentDays,
-      },
+      attendanceSummary: summary.attendanceSummary,
 
-      leaveSummary: {
-        approvedLeaveDays,
-        unpaidLeaveDays,
+      // IMPORTANT:
+      // leaveDeduction is inside leaveSummary
+      leaveSummary: summary.leaveSummary,
 
-        // IMPORTANT:
-        // leaveDeduction is inside leaveSummary
-        leaveDeduction,
-      },
+      grossSalary: summary.grossSalary,
 
-      grossSalary,
-
-      netSalary,
+      netSalary: summary.netSalary,
 
       status: "Generated",
     });
@@ -397,8 +300,6 @@ const getPayrollById = async (req, res) => {
 // =========================================================
 const getMyPayrolls = async (req, res) => {
   try {
-    const User = require("../models/User");
-
     const user = await User.findById(req.user.id);
 
     if (!user) {
