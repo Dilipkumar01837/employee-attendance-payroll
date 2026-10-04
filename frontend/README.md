@@ -19,7 +19,7 @@ npm run preview  # serve the production build
 | --- | --- | --- |
 | `VITE_API_URL` | `http://localhost:5000` | Base URL of the API |
 
-The backend's `CLIENT_URLS` allowlist must include the origin you serve this from. It
+The backend's `CLIENT_URL` allowlist must include the origin you serve this from. It
 matches exact origins, so `http://localhost:5174` is not covered by an entry for
 `http://localhost:5173`.
 

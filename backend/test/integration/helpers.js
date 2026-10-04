@@ -93,6 +93,10 @@ const createClient = () => {
       return this.request("POST", path, body === undefined ? {} : body);
     },
 
+    put(path, body) {
+      return this.request("PUT", path, body === undefined ? {} : body);
+    },
+
     patch(path, body) {
       return this.request("PATCH", path, body);
     },

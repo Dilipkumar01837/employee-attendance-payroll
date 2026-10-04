@@ -55,9 +55,8 @@ const getManagementSummary = async (req, res) => {
     const countStatus = (status) =>
       todayAttendance.filter((record) => record.status === status).length;
 
-    // Someone can be marked Absent by HR rather than simply having no record,
-    // so today's absence is the union of both signals.
-    const presentToday = new Set(
+    // Set of employee IDs with any attended status today (Present, Late, Half-day)
+    const attendedEmployeeIds = new Set(
       todayAttendance
         .filter((record) => record.status !== "Absent")
         .map((record) => record.employeeId)
@@ -67,24 +66,6 @@ const getManagementSummary = async (req, res) => {
         .filter((record) => record.status === "Absent")
         .map((record) => record.employeeId)
     );
-
-    const leaveDayIndexes = new Set();
-    for (const leave of todayLeaves) {
-      const start = new Date(
-        `${getISTDateString(leave.startDate)}T00:00:00+05:30`
-      );
-      const end = new Date(
-        `${getISTDateString(leave.endDate)}T00:00:00+05:30`
-      );
-
-      for (
-        let t = start.getTime();
-        t <= end.getTime();
-        t += 24 * 60 * 60 * 1000
-      ) {
-        leaveDayIndexes.add(getISTDateString(new Date(t)));
-      }
-    }
 
     const onLeaveEmployeeIds = new Set(
       todayLeaves.map((leave) => leave.employeeId)
@@ -98,7 +79,7 @@ const getManagementSummary = async (req, res) => {
 
     const notAccountedFor = activeEmployeeIds.filter(
       (employeeId) =>
-        !presentToday.has(employeeId) &&
+        !attendedEmployeeIds.has(employeeId) &&
         !onLeaveEmployeeIds.has(employeeId) &&
         !explicitlyAbsent.has(employeeId)
     ).length;
@@ -141,7 +122,7 @@ const getManagementSummary = async (req, res) => {
           inactive: totalEmployees - activeEmployees,
         },
         attendanceToday: {
-          present: presentToday.size,
+          present: countStatus("Present"),
           late: countStatus("Late"),
           halfDay: countStatus("Half-day"),
           absent: explicitlyAbsent.size + notAccountedFor,
