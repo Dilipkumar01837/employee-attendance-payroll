@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../services/api";
 import { getCurrentISTMonth } from "../services/datetime";
 
-function MonthlySummary({ employees, user, onError }) {
+function MonthlySummary({ employees, myEmployeeId, user, onError }) {
   const [month, setMonth] = useState(getCurrentISTMonth);
   const [employeeId, setEmployeeId] = useState("");
   const [summary, setSummary] = useState(null);
@@ -10,20 +10,11 @@ function MonthlySummary({ employees, user, onError }) {
 
   const isEmployee = user.role === "employee";
 
-  // An employee can only ever view their own record, so resolve it from the
-  // directory during render instead of writing it back through an effect.
-  const ownEmployee =
-    isEmployee && employees.length > 0
-      ? employees.find((employee) => employee.email === user.email) ||
-        employees.find(
-          (employee) =>
-            employee.user && String(employee.user) === String(user.id)
-        )
-      : null;
-
-  const effectiveEmployeeId = isEmployee
-    ? (ownEmployee?.employeeId ?? "")
-    : employeeId;
+  // An employee can only ever view their own record. The ID comes from
+  // `/api/employees/me` and is passed in; it used to be looked up in the
+  // employee directory, which the employee role is not allowed to read, so this
+  // page always showed "no employee record linked".
+  const effectiveEmployeeId = isEmployee ? myEmployeeId || "" : employeeId;
 
   useEffect(() => {
     if (!effectiveEmployeeId) return;
@@ -104,6 +95,11 @@ function MonthlySummary({ employees, user, onError }) {
           </div>
 
           <div className="summary-card">
+            <span className="summary-value">{summary.halfDays}</span>
+            <span className="summary-label">Half-days</span>
+          </div>
+
+          <div className="summary-card">
             <span className="summary-value">{summary.absentDays}</span>
             <span className="summary-label">Absent</span>
           </div>
@@ -118,6 +114,13 @@ function MonthlySummary({ employees, user, onError }) {
               {summary.totalHours != null ? `${summary.totalHours}h` : "--"}
             </span>
             <span className="summary-label">Total Hours</span>
+          </div>
+
+          <div className="summary-card highlight">
+            <span className="summary-value">{summary.equivalentDays}</span>
+            <span className="summary-label">
+              Equivalent days (half-day = 0.5)
+            </span>
           </div>
 
           <div className="summary-card highlight">

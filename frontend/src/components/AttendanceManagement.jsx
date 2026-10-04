@@ -8,6 +8,16 @@ function AttendanceManagement({ employees, onError }) {
   const [statusFilter, setStatusFilter] = useState("");
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [marking, setMarking] = useState(false);
+  const [message, setMessage] = useState("");
+  const [markForm, setMarkForm] = useState({
+    employeeId: "",
+    date: "",
+    status: "Absent",
+    checkIn: "",
+    checkOut: "",
+    notes: "",
+  });
 
   const loadRecords = useCallback(
     async (targetMonth, targetEmployeeId, targetStatus) => {
@@ -38,6 +48,51 @@ function AttendanceManagement({ employees, onError }) {
     // oxlint-disable-next-line react/set-state-in-effect
     loadRecords(month, employeeIdFilter, statusFilter);
   }, [employeeIdFilter, loadRecords, month, statusFilter]);
+
+  // Absent and Half-day cannot be produced by a check-in, and there was no
+  // other way to write them, so both statuses were unreachable from the app.
+  // Marking a day here creates the record, or corrects it if one already exists.
+  const submitMark = async (event) => {
+    event.preventDefault();
+
+    setMarking(true);
+    setMessage("");
+    onError("");
+
+    try {
+      const body = {
+        employeeId: markForm.employeeId,
+        date: markForm.date,
+        status: markForm.status,
+      };
+
+      if (markForm.checkIn) body.checkIn = markForm.checkIn;
+      if (markForm.checkOut) body.checkOut = markForm.checkOut;
+      if (markForm.notes) body.notes = markForm.notes;
+
+      const data = await api("/api/attendance/mark", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      setMessage(data.message);
+
+      setMarkForm((current) => ({
+        ...current,
+        checkIn: "",
+        checkOut: "",
+        notes: "",
+      }));
+
+      await loadRecords(month, employeeIdFilter, statusFilter);
+    } catch (err) {
+      onError(err.message);
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  const requiresTimes = markForm.status !== "Absent";
 
   return (
     <section className="records-section">
@@ -88,6 +143,109 @@ function AttendanceManagement({ employees, onError }) {
           <option value="Absent">Absent</option>
         </select>
       </div>
+
+      {message && <div className="message success-message">{message}</div>}
+
+      <form className="employee-form-card" onSubmit={submitMark}>
+        <div className="card-heading">
+          <div>
+            <h5>Record or correct attendance</h5>
+            <p>
+              Mark an absence, a half-day, or fix a day that was entered wrongly.
+              Marking a day that already has a record overwrites it.
+            </p>
+          </div>
+        </div>
+
+        <div className="employee-form-grid">
+          <label>
+            Employee
+            <select
+              required
+              value={markForm.employeeId}
+              onChange={(event) =>
+                setMarkForm({ ...markForm, employeeId: event.target.value })
+              }
+            >
+              <option value="">Select employee</option>
+              {employees.map((emp) => (
+                <option key={emp._id} value={emp.employeeId}>
+                  {emp.employeeId} — {emp.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Date
+            <input
+              required
+              type="date"
+              value={markForm.date}
+              onChange={(event) =>
+                setMarkForm({ ...markForm, date: event.target.value })
+              }
+            />
+          </label>
+
+          <label>
+            Status
+            <select
+              required
+              value={markForm.status}
+              onChange={(event) =>
+                setMarkForm({ ...markForm, status: event.target.value })
+              }
+            >
+              <option value="Present">Present</option>
+              <option value="Late">Late</option>
+              <option value="Half-day">Half-day</option>
+              <option value="Absent">Absent</option>
+            </select>
+          </label>
+
+          {requiresTimes && (
+            <label>
+              Check-in (HH:mm)
+              <input
+                required
+                type="time"
+                value={markForm.checkIn}
+                onChange={(event) =>
+                  setMarkForm({ ...markForm, checkIn: event.target.value })
+                }
+              />
+            </label>
+          )}
+
+          {requiresTimes && (
+            <label>
+              Check-out (HH:mm, optional)
+              <input
+                type="time"
+                value={markForm.checkOut}
+                onChange={(event) =>
+                  setMarkForm({ ...markForm, checkOut: event.target.value })
+                }
+              />
+            </label>
+          )}
+
+          <label>
+            Notes
+            <input
+              value={markForm.notes}
+              onChange={(event) =>
+                setMarkForm({ ...markForm, notes: event.target.value })
+              }
+            />
+          </label>
+        </div>
+
+        <button className="primary-button form-submit-button" disabled={marking} type="submit">
+          {marking ? "Saving..." : "Save attendance"}
+        </button>
+      </form>
 
       {loading ? (
         <div className="empty-state">Loading attendance records...</div>

@@ -59,7 +59,9 @@ router.post(
   login
 );
 
-router.post("/logout", protect, logout);
+// Not behind `protect`: an expired session must still be able to clear its
+// cookie, otherwise the stale token is replayed on every later request.
+router.post("/logout", logout);
 
 router.get("/me", protect, getMe);
 

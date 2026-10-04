@@ -21,7 +21,11 @@ const protect = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Pinned to HS256 so a token cannot be presented as, say, an RS256 token
+    // with the public key in place of the shared secret.
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    });
 
     const user = await User.findById(decoded.id);
 

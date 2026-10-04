@@ -1,38 +1,41 @@
 const Leave = require("../models/Leave");
 const Employee = require("../models/Employee");
-const User = require("../models/User");
 const {
+  getISTDateString,
+  getISTDayIndex,
   getISTMonthBounds,
   isValidMonth,
   parseMonth,
 } = require("../utils/dateUtils");
 const { buildLeaveDaySets } = require("../utils/payrollMath");
+const { isEmployeeActive, resolveEmployeeForUser } = require("../utils/employeeLink");
 
-const resolveEmployeeForUser = async (userId) => {
-  let employee = await Employee.findOne({ user: userId });
+// A `<input type="date">` submits "2026-10-01". Parsed with `new Date()` that
+// becomes UTC midnight, which is still the same IST calendar day but only by
+// luck of the half-hour offset; the moment anyone stores or re-serialises it as
+// local time it slips to the previous day. Anchoring at IST midnight makes the
+// stored instant and the business calendar day the same thing by construction.
+const parseCalendarDate = (value) => {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const parsed = new Date(`${value}T00:00:00+05:30`);
 
-  if (!employee) {
-    const user = await User.findById(userId);
+    if (Number.isNaN(parsed.getTime())) return null;
 
-    if (user) {
-      employee = await Employee.findOne({
-        email: user.email.toLowerCase(),
-      });
-    }
+    // Reject values like 2026-02-31 that Date would silently roll over.
+    if (getISTDateString(parsed) !== value) return null;
+
+    return parsed;
   }
 
-  return employee;
+  const fallback = new Date(value);
+
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
 };
 
 // Apply for leave
 const applyLeave = async (req, res) => {
   try {
-    const {
-      leaveType,
-      startDate,
-      endDate,
-      reason,
-    } = req.body;
+    const { leaveType, startDate, endDate, reason } = req.body;
 
     if (!leaveType || !startDate || !endDate || !reason) {
       return res.status(400).json({
@@ -42,7 +45,10 @@ const applyLeave = async (req, res) => {
       });
     }
 
-    const employee = await resolveEmployeeForUser(req.user.id);
+    const employee = await resolveEmployeeForUser(
+      req.user.id,
+      req.user.email
+    );
 
     if (!employee) {
       return res.status(400).json({
@@ -52,40 +58,60 @@ const applyLeave = async (req, res) => {
       });
     }
 
-    const employeeId = employee.employeeId;
-
-    if (!employee.isActive) {
+    if (!isEmployeeActive(employee)) {
       return res.status(400).json({
         success: false,
         message: "Inactive employees cannot apply for leave",
       });
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const employeeId = employee.employeeId;
+    const start = parseCalendarDate(startDate);
+    const end = parseCalendarDate(endDate);
 
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    if (!start || !end) {
       return res.status(400).json({
         success: false,
         message: "Invalid start date or end date",
       });
     }
 
-    if (end < start) {
+    if (end.getTime() < start.getTime()) {
       return res.status(400).json({
         success: false,
         message: "End date cannot be before start date",
       });
     }
 
-    const overlappingLeave = await Leave.findOne({
+    const today = new Date(`${getISTDateString()}T00:00:00+05:30`);
+
+    if (start.getTime() < today.getTime()) {
+      return res.status(400).json({
+        success: false,
+        message: "Leave cannot start on a past date",
+      });
+    }
+
+    // Overlap is decided in IST day-index space, the same space the payroll
+    // maths uses, so a leave ending on the 30th and one starting on the 1st are
+    // seen as adjacent rather than overlapping, and a UTC-stored record can
+    // never appear to start a day early.
+    const requestedStart = getISTDayIndex(start);
+    const requestedEnd = getISTDayIndex(end);
+
+    const candidates = await Leave.find({
       employeeId,
       status: { $in: ["Pending", "Approved"] },
-      startDate: { $lte: end },
-      endDate: { $gte: start },
     });
 
-    if (overlappingLeave) {
+    const overlaps = candidates.some((leave) => {
+      const leaveStart = getISTDayIndex(leave.startDate);
+      const leaveEnd = getISTDayIndex(leave.endDate);
+
+      return leaveStart <= requestedEnd && leaveEnd >= requestedStart;
+    });
+
+    if (overlaps) {
       return res.status(409).json({
         success: false,
         message: "Leave dates overlap with an existing leave request",
@@ -106,7 +132,7 @@ const applyLeave = async (req, res) => {
       data: leave,
     });
   } catch (error) {
-    console.error("Error in leaveController.applyLeave:", error);
+    console.error("Error in leaveController.applyLeave:", error.message);
     return res.status(500).json({
       success: false,
       message: "Failed to apply for leave",
@@ -117,7 +143,10 @@ const applyLeave = async (req, res) => {
 // Get employee's leave history
 const getMyLeaves = async (req, res) => {
   try {
-    const employee = await resolveEmployeeForUser(req.user.id);
+    const employee = await resolveEmployeeForUser(
+      req.user.id,
+      req.user.email
+    );
 
     if (!employee) {
       return res.status(404).json({
@@ -139,7 +168,7 @@ const getMyLeaves = async (req, res) => {
       data: leaves,
     });
   } catch (error) {
-    console.error("Error in leaveController.getMyLeaves:", error);
+    console.error("Error in leaveController.getMyLeaves:", error.message);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch leave history",
@@ -196,7 +225,7 @@ const getAllLeaves = async (req, res) => {
       data: leaves,
     });
   } catch (error) {
-    console.error("Error in leaveController.getAllLeaves:", error);
+    console.error("Error in leaveController.getAllLeaves:", error.message);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch leave requests",
@@ -204,40 +233,46 @@ const getAllLeaves = async (req, res) => {
   }
 };
 
+const decideLeave = async (req, res, decision) => {
+  const { id } = req.params;
+  const { remarks } = req.body;
+
+  const leave = await Leave.findById(id);
+
+  if (!leave) {
+    return res.status(404).json({
+      success: false,
+      message: "Leave request not found",
+    });
+  }
+
+  if (leave.status !== "Pending") {
+    return res.status(400).json({
+      success: false,
+      message: `Leave request is already ${leave.status.toLowerCase()}`,
+    });
+  }
+
+  leave.status = decision === "approve" ? "Approved" : "Rejected";
+  leave.remarks = remarks || "";
+  leave.decidedBy = req.user.id;
+  leave.decidedAt = new Date();
+
+  await leave.save();
+
+  return res.status(200).json({
+    success: true,
+    message: `Leave ${decision === "approve" ? "approved" : "rejected"} successfully`,
+    data: leave,
+  });
+};
+
 // HR/Admin - Approve leave
 const approveLeave = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { remarks } = req.body;
-
-    const leave = await Leave.findById(id);
-
-    if (!leave) {
-      return res.status(404).json({
-        success: false,
-        message: "Leave request not found",
-      });
-    }
-
-    if (leave.status !== "Pending") {
-      return res.status(400).json({
-        success: false,
-        message: `Leave request is already ${leave.status.toLowerCase()}`,
-      });
-    }
-
-    leave.status = "Approved";
-    leave.remarks = remarks || "";
-
-    await leave.save();
-
-    return res.status(200).json({
-      success: true,
-      message: "Leave approved successfully",
-      data: leave,
-    });
+    return await decideLeave(req, res, "approve");
   } catch (error) {
-    console.error("Error in leaveController.approveLeave:", error);
+    console.error("Error in leaveController.approveLeave:", error.message);
     return res.status(500).json({
       success: false,
       message: "Failed to approve leave",
@@ -248,37 +283,9 @@ const approveLeave = async (req, res) => {
 // HR/Admin - Reject leave
 const rejectLeave = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { remarks } = req.body;
-
-    const leave = await Leave.findById(id);
-
-    if (!leave) {
-      return res.status(404).json({
-        success: false,
-        message: "Leave request not found",
-      });
-    }
-
-    if (leave.status !== "Pending") {
-      return res.status(400).json({
-        success: false,
-        message: `Leave request is already ${leave.status.toLowerCase()}`,
-      });
-    }
-
-    leave.status = "Rejected";
-    leave.remarks = remarks || "";
-
-    await leave.save();
-
-    return res.status(200).json({
-      success: true,
-      message: "Leave rejected successfully",
-      data: leave,
-    });
+    return await decideLeave(req, res, "reject");
   } catch (error) {
-    console.error("Error in leaveController.rejectLeave:", error);
+    console.error("Error in leaveController.rejectLeave:", error.message);
     return res.status(500).json({
       success: false,
       message: "Failed to reject leave",
@@ -328,19 +335,27 @@ const getApprovedLeaveDaysForPayroll = async (req, res) => {
       endDate: { $gte: monthStart },
     });
 
-    const { allDays } = buildLeaveDaySets(leaves, monthStart, monthEnd);
-    const approvedLeaveDays = allDays.size;
+    const { allDays, unpaidDays } = buildLeaveDaySets(
+      leaves,
+      monthStart,
+      monthEnd
+    );
 
     return res.status(200).json({
       success: true,
       data: {
         employeeId,
         month,
-        approvedLeaveDays,
+        approvedLeaveDays: allDays.size,
+        paidLeaveDays: allDays.size - unpaidDays.size,
+        unpaidLeaveDays: unpaidDays.size,
       },
     });
   } catch (error) {
-    console.error("Error in leaveController.getApprovedLeaveDaysForPayroll:", error);
+    console.error(
+      "Error in leaveController.getApprovedLeaveDaysForPayroll:",
+      error.message
+    );
     return res.status(500).json({
       success: false,
       message: "Failed to calculate approved leave days",

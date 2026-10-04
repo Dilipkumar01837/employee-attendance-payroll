@@ -2,7 +2,6 @@ const Payroll = require("../models/Payroll");
 const Leave = require("../models/Leave");
 const Attendance = require("../models/Attendance");
 const Employee = require("../models/Employee");
-const User = require("../models/User");
 const {
   getDaysInMonth,
   getISTMonthBounds,
@@ -10,21 +9,31 @@ const {
   parseMonth,
 } = require("../utils/dateUtils");
 const { computePayrollSummary } = require("../utils/payrollMath");
+const { resolveEmployeeForUser } = require("../utils/employeeLink");
+
+// Draft -> Generated -> Approved -> Paid. A payroll that has been paid is
+// final: reopening it is only possible by an admin reversing it with a written
+// reason, and both are recorded on the document.
+const STATUS_FLOW = {
+  Draft: ["Generated"],
+  Generated: ["Approved", "Draft"],
+  Approved: ["Paid", "Generated"],
+  Paid: ["Approved"],
+};
+
+const nextStatuses = (status) => STATUS_FLOW[status] || [];
+
+const canTransition = (from, to) => nextStatuses(from).includes(to);
 
 const generatePayroll = async (req, res) => {
   try {
-    const {
-      employee,
-      payrollMonth,
-      basicSalary,
-      allowances = 0,
-      deductions = 0,
-    } = req.body;
+    const { employee, payrollMonth, allowances, deductions } = req.body;
+    const suppliedBasic = req.body.basicSalary;
 
-    if (!employee || !payrollMonth || basicSalary === undefined) {
+    if (!employee || !payrollMonth) {
       return res.status(400).json({
         success: false,
-        message: "Employee, payroll month and basic salary are required",
+        message: "Employee and payroll month are required",
       });
     }
 
@@ -32,30 +41,6 @@ const generatePayroll = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Payroll month must be in YYYY-MM format",
-      });
-    }
-
-    const { year, month: monthNumber } = parseMonth(payrollMonth);
-
-    const basic = Number(basicSalary);
-    const allowanceAmount = Number(allowances);
-    const deductionAmount = Number(deductions);
-
-    if (
-      !Number.isFinite(basic) ||
-      !Number.isFinite(allowanceAmount) ||
-      !Number.isFinite(deductionAmount)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Salary values must be valid numbers",
-      });
-    }
-
-    if (basic < 0 || allowanceAmount < 0 || deductionAmount < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Basic salary, allowances and deductions cannot be negative",
       });
     }
 
@@ -80,6 +65,65 @@ const generatePayroll = async (req, res) => {
       });
     }
 
+    // The basic salary comes from the employee record. It used to be taken
+    // straight from the request body, which let any HR/Admin account pay an
+    // employee an arbitrary amount unrelated to their record.
+    const basic = Number(employeeRecord.salary) || 0;
+
+    if (suppliedBasic !== undefined) {
+      const requested = Number(suppliedBasic);
+
+      if (!Number.isFinite(requested) || requested < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Basic salary must be a non-negative number",
+        });
+      }
+
+      if (requested !== basic) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Basic salary is read from the employee record and cannot be overridden here. Update the employee record first.",
+        });
+      }
+    }
+
+    if (basic <= 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This employee has no basic salary on record. Set a salary on the employee record before generating payroll.",
+      });
+    }
+
+    // Allowances and deductions fall back to the employee record and may be
+    // adjusted for a specific run, but only within the gross they are applied
+    // to.
+    const allowanceSource = allowances === undefined
+      ? Number(employeeRecord.allowances) || 0
+      : Number(allowances);
+    const deductionSource = deductions === undefined
+      ? Number(employeeRecord.deductions) || 0
+      : Number(deductions);
+
+    if (!Number.isFinite(allowanceSource) || allowanceSource < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Allowances must be a non-negative number",
+      });
+    }
+
+    if (!Number.isFinite(deductionSource) || deductionSource < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Deductions must be a non-negative number",
+      });
+    }
+
+    const allowanceAmount = allowanceSource;
+    const deductionAmount = deductionSource;
+
     const existingPayroll = await Payroll.findOne({
       employee: employeeRecord._id,
       payrollMonth,
@@ -92,6 +136,7 @@ const generatePayroll = async (req, res) => {
       });
     }
 
+    const { year, month: monthNumber } = parseMonth(payrollMonth);
     const { start: monthStart, end: monthEnd } = getISTMonthBounds(
       year,
       monthNumber
@@ -138,6 +183,18 @@ const generatePayroll = async (req, res) => {
       deductions: deductionAmount,
     });
 
+    if (
+      deductionAmount + summary.leaveSummary.leaveDeduction +
+        summary.leaveSummary.halfDayDeduction >
+      grossSalary
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Deductions plus attendance and leave deductions exceed the gross salary for this month",
+      });
+    }
+
     const payroll = await Payroll.create({
       employee: employeeRecord._id,
       payrollMonth,
@@ -149,6 +206,7 @@ const generatePayroll = async (req, res) => {
       grossSalary: summary.grossSalary,
       netSalary: summary.netSalary,
       status: "Generated",
+      salarySource: "employee_record",
     });
 
     return res.status(201).json({
@@ -157,7 +215,14 @@ const generatePayroll = async (req, res) => {
       data: payroll,
     });
   } catch (error) {
-    console.error("Error in payrollController.generatePayroll:", error);
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Payroll already exists for this employee and month",
+      });
+    }
+
+    console.error("Error in payrollController.generatePayroll:", error.message);
     return res.status(500).json({
       success: false,
       message: "Server error while generating payroll",
@@ -173,10 +238,11 @@ const getAllPayrolls = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      count: payrolls.length,
       data: payrolls,
     });
   } catch (error) {
-    console.error("Error in payrollController.getAllPayrolls:", error);
+    console.error("Error in payrollController.getAllPayrolls:", error.message);
     return res.status(500).json({
       success: false,
       message: "Server error while fetching payroll records",
@@ -184,17 +250,56 @@ const getAllPayrolls = async (req, res) => {
   }
 };
 
+// Shared by the management read and the employee's own payslip read, so an
+// employee can reach their own payslip by id and nobody else's.
+const findPayrollForUser = async (payrollId, user) => {
+  const payroll = await Payroll.findById(payrollId).populate(
+    "employee",
+    "employeeId name email department designation"
+  );
+
+  if (!payroll) {
+    return { error: { status: 404, message: "Payroll not found" } };
+  }
+
+  if (user.role === "admin" || user.role === "hr") {
+    return { payroll };
+  }
+
+  const employee = await resolveEmployeeForUser(user.id, user.email);
+
+  if (!employee) {
+    return {
+      error: {
+        status: 404,
+        message: "No employee record is linked to your account.",
+      },
+    };
+  }
+
+  if (String(payroll.employee?._id || payroll.employee) !== String(employee._id)) {
+    return {
+      error: {
+        status: 403,
+        message: "Access denied. You can only view your own payslip.",
+      },
+    };
+  }
+
+  return { payroll };
+};
+
 const getPayrollById = async (req, res) => {
   try {
-    const payroll = await Payroll.findById(req.params.id).populate(
-      "employee",
-      "employeeId name email department designation"
+    const { payroll, error } = await findPayrollForUser(
+      req.params.id,
+      req.user
     );
 
-    if (!payroll) {
-      return res.status(404).json({
+    if (error) {
+      return res.status(error.status).json({
         success: false,
-        message: "Payroll not found",
+        message: error.message,
       });
     }
 
@@ -202,8 +307,15 @@ const getPayrollById = async (req, res) => {
       success: true,
       data: payroll,
     });
-  } catch (error) {
-    console.error("Error in payrollController.getPayrollById:", error);
+  } catch (err) {
+    if (err.name === "CastError") {
+      return res.status(404).json({
+        success: false,
+        message: "Payroll not found",
+      });
+    }
+
+    console.error("Error in payrollController.getPayrollById:", err.message);
     return res.status(500).json({
       success: false,
       message: "Server error while fetching payroll details",
@@ -213,18 +325,10 @@ const getPayrollById = async (req, res) => {
 
 const getMyPayrolls = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    const employee = await Employee.findOne({
-      email: user.email,
-    });
+    const employee = await resolveEmployeeForUser(
+      req.user.id,
+      req.user.email
+    );
 
     if (!employee) {
       return res.status(404).json({
@@ -237,14 +341,15 @@ const getMyPayrolls = async (req, res) => {
       employee: employee._id,
     })
       .populate("employee", "employeeId name email department designation")
-      .sort({ createdAt: -1 });
+      .sort({ payrollMonth: -1, createdAt: -1 });
 
     return res.status(200).json({
       success: true,
+      count: payrolls.length,
       data: payrolls,
     });
   } catch (error) {
-    console.error("Error in payrollController.getMyPayrolls:", error);
+    console.error("Error in payrollController.getMyPayrolls:", error.message);
     return res.status(500).json({
       success: false,
       message: "Server error while fetching your payrolls",
@@ -255,15 +360,7 @@ const getMyPayrolls = async (req, res) => {
 const updatePayrollStatus = async (req, res) => {
   try {
     const { status } = req.body;
-
-    const allowedStatuses = ["Draft", "Generated", "Approved", "Paid"];
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid payroll status",
-      });
-    }
+    const reversalReason = req.body.reversalReason;
 
     const payroll = await Payroll.findById(req.params.id);
 
@@ -274,8 +371,50 @@ const updatePayrollStatus = async (req, res) => {
       });
     }
 
-    payroll.status = status;
+    if (!Object.keys(STATUS_FLOW).includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payroll status",
+      });
+    }
 
+    // Reopening a paid payroll is checked first, and before the ordinary
+    // transition check, because it is the only transition with extra
+    // requirements. Order is deliberate: validate the input, then the role.
+    if (payroll.status === "Paid" && status !== "Paid") {
+      if (!reversalReason || String(reversalReason).trim().length < 5) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Reversing a paid payroll requires a reversal reason of at least 5 characters",
+        });
+      }
+
+      if (req.user.role !== "admin") {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Only an admin may reverse a paid payroll. Raise an admin request.",
+        });
+      }
+
+      payroll.reversal = {
+        reason: String(reversalReason).trim(),
+        reversedAt: new Date(),
+        reversedBy: req.user.id,
+      };
+    }
+
+    if (!canTransition(payroll.status, status)) {
+      return res.status(409).json({
+        success: false,
+        message: `Cannot change payroll status from ${payroll.status} to ${status}. Allowed next: ${
+          nextStatuses(payroll.status).join(", ") || "none"
+        }`,
+      });
+    }
+
+    payroll.status = status;
     await payroll.save();
 
     return res.status(200).json({
@@ -283,8 +422,15 @@ const updatePayrollStatus = async (req, res) => {
       message: "Payroll status updated successfully",
       data: payroll,
     });
-  } catch (error) {
-    console.error("Error in payrollController.updatePayrollStatus:", error);
+  } catch (err) {
+    if (err.name === "CastError") {
+      return res.status(404).json({
+        success: false,
+        message: "Payroll not found",
+      });
+    }
+
+    console.error("Error in payrollController.updatePayrollStatus:", err.message);
     return res.status(500).json({
       success: false,
       message: "Server error while updating payroll status",
@@ -293,9 +439,12 @@ const updatePayrollStatus = async (req, res) => {
 };
 
 module.exports = {
+  STATUS_FLOW,
+  canTransition,
   generatePayroll,
   getAllPayrolls,
-  getPayrollById,
   getMyPayrolls,
+  getPayrollById,
+  nextStatuses,
   updatePayrollStatus,
 };

@@ -42,6 +42,19 @@ const leaveSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+
+    // Set when HR/Admin approves or rejects, so a decision can be traced back
+    // to the account that made it.
+    decidedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    decidedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

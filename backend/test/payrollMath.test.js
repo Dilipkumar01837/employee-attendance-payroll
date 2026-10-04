@@ -275,11 +275,101 @@ test("computePayrollSummary counts an attended leave day once", () => {
   });
 
   // September 18 is both attended and unpaid leave. Old workingDays was
-  // attendanceDays + absentDays = 1 + 27 = 28 on a 30 day month with 2 leave
-  // days, which does not add up. The union accounts for 18 and 19 once each.
+  // attendanceDays + absentDays = 1 + 28 = 29 on a 30 day month with 2 leave
+  // days, which does not add up: it silently dropped a day from the count.
+  // `workingDays` is now the calendar day count that the daily rate divides by,
+  // and the union accounts for 18 and 19 once each.
   assert.equal(summary.attendanceSummary.absentDays, 28);
-  assert.equal(summary.attendanceSummary.workingDays, 1 + 28);
+  assert.equal(summary.attendanceSummary.workingDays, DAYS_IN_MONTH);
+  assert.equal(summary.attendanceSummary.equivalentDays, 1);
+  assert.equal(summary.attendanceSummary.payableDays, 1);
   assert.equal(summary.leaveSummary.approvedLeaveDays, 2);
+// Day 18 was attended, so it is not billed as unpaid leave even though an
+  // approved leave covers it. Only day 19 is billed.
+  assert.equal(summary.leaveSummary.unpaidLeaveDays, 2);
+  assert.equal(summary.leaveSummary.billedUnpaidLeaveDays, 1);
+  assert.equal(summary.leaveSummary.leaveDeduction, 2000);
+  assert.equal(summary.netSalary, 58000);
+});
+
+test("computePayrollSummary charges a half day on unpaid leave once", () => {
+  // A half-day record on an unpaid leave day is billed as half a day, not as a
+  // half day plus a whole unpaid leave day.
+  const summary = computePayrollSummary({
+    windowStart: WINDOW.start,
+    windowEnd: WINDOW.end,
+    daysInMonth: DAYS_IN_MONTH,
+    records: [attendanceRecord(18, "Half-day", 4)],
+    leaves: [leave(18, 18, "Other")],
+    basic: 60000,
+    allowances: 0,
+    deductions: 0,
+  });
+
+  // 60000 / 30 = 2000 per day. The employee worked half of the leave day, so
+  // only that half is charged: never a half day plus a whole unpaid leave day.
+  assert.equal(summary.leaveSummary.unpaidLeaveDays, 1);
+  assert.equal(summary.leaveSummary.billedUnpaidLeaveDays, 0);
+  assert.equal(summary.attendanceSummary.halfDays, 1);
+  assert.equal(summary.attendanceSummary.equivalentDays, 0.5);
+  assert.equal(summary.leaveSummary.leaveDeduction, 0);
+  assert.equal(summary.leaveSummary.halfDayDeduction, 1000);
+  assert.equal(summary.netSalary, 59000);
+});
+
+test("computePayrollSummary deducts a standalone half day", () => {
+  const summary = computePayrollSummary({
+    windowStart: WINDOW.start,
+    windowEnd: WINDOW.end,
+    daysInMonth: DAYS_IN_MONTH,
+    records: [attendanceRecord(18, "Half-day", 4)],
+    leaves: [],
+    basic: 60000,
+    allowances: 0,
+    deductions: 0,
+  });
+
+  assert.equal(summary.attendanceSummary.equivalentDays, 0.5);
+  assert.equal(summary.leaveSummary.halfDayDeduction, 1000);
+  assert.equal(summary.netSalary, 59000);
+});
+
+test("computePayrollSummary weights the requested 20 Present / 2 Late / 2 Half-day case", () => {
+  const records = [];
+
+  for (let day = 1; day <= 24; day += 1) {
+    if (day === 21 || day === 22) {
+      records.push(attendanceRecord(day, "Half-day", 4));
+    } else if (day === 20 || day === 24) {
+      records.push(attendanceRecord(day, "Late", 9));
+    } else {
+      records.push(attendanceRecord(day, "Present", 8));
+    }
+  }
+
+  const summary = computePayrollSummary({
+    windowStart: WINDOW.start,
+    windowEnd: WINDOW.end,
+    daysInMonth: DAYS_IN_MONTH,
+    records,
+    leaves: [],
+    basic: 60000,
+    allowances: 0,
+    deductions: 0,
+  });
+
+  // 20 Present + 2 Late + 2 Half-day = 23 equivalent days. One ordinary
+  // absence and five unmarked days are not deducted.
+  assert.equal(summary.attendanceSummary.presentDays, 20);
+  assert.equal(summary.attendanceSummary.lateDays, 2);
+  assert.equal(summary.attendanceSummary.halfDays, 2);
+  assert.equal(summary.attendanceSummary.equivalentDays, 23);
+
+  // 60000 / 30 = 2000 per day, two half days = 2000.
+  assert.equal(summary.leaveSummary.halfDayDeduction, 2000);
+  assert.equal(summary.leaveSummary.leaveDeduction, 0);
+  assert.equal(summary.grossSalary, 60000);
+  assert.equal(summary.netSalary, 58000);
 });
 
 test("computePayrollSummary never returns a negative net salary", () => {

@@ -7,9 +7,11 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node scripts/createTestData.js",
-    "test": "node --test",
+    "test": "node --test \"test/*.test.js\"",
+    "test:integration": "node --test --test-concurrency=1 \"test/integration/*.test.js\"",
     "lint": "node scripts/lint.js",
     "smoke": "node scripts/smokeTest.js",
+    "verify": "npm run lint && npm test",
     "predeploy": "npm audit --audit-level=high"
   },
   "keywords": [],

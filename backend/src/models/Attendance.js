@@ -13,9 +13,14 @@ const attendanceSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Not required: an `Absent` day is a record of somebody not being there, so
+    // it has no check-in. `required: true` here made the Absent status
+    // impossible to store even though it is in the enum and offered as a
+    // filter. Enforced in the controller instead: every status other than
+    // `Absent` must supply a check-in.
     checkIn: {
       type: Date,
-      required: true,
+      default: null,
     },
 
     checkOut: {
@@ -38,6 +43,15 @@ const attendanceSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+
+    // Absent and Half-day can only be written by HR/Admin through
+    // POST /api/attendance/mark. Recorded so a manual correction is
+    // distinguishable from a check-in.
+    markedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
   {

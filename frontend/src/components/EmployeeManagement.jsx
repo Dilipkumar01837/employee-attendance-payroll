@@ -21,6 +21,7 @@ function EmployeeManagement({ user, onEmployeesChanged }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [createdAccount, setCreatedAccount] = useState(null);
   const canManage = user.role === "admin" || user.role === "hr";
 
   const searchRef = useRef("");
@@ -96,10 +97,22 @@ function EmployeeManagement({ user, onEmployeesChanged }) {
         salary: Number(form.salary || 0),
       };
       const endpoint = editingId ? `/api/employees/${editingId}` : "/api/employees";
-      await api(endpoint, {
+      const result = await api(endpoint, {
         method: editingId ? "PUT" : "POST",
         body: JSON.stringify(payload),
       });
+
+      // Creating an employee also creates their login. When HR does not supply a
+      // password the API generates one and returns it exactly once, so it has to
+      // be shown here or the new account is unreachable: the password is stored
+      // only as a bcrypt hash and cannot be displayed again.
+      if (!editingId && result.temporaryPassword) {
+        setCreatedAccount({
+          email: form.email,
+          password: result.temporaryPassword,
+        });
+      }
+
       resetForm();
       await loadEmployees();
       onEmployeesChanged?.();
@@ -154,6 +167,33 @@ function EmployeeManagement({ user, onEmployeesChanged }) {
       </div>
 
       {error && <div className="message error-message">{error}</div>}
+
+      {createdAccount && (
+        <div className="message success-message">
+          <strong>Temporary password generated</strong>
+
+          <p>
+            Hand this to the new employee. It is shown once and cannot be
+            retrieved later.
+          </p>
+
+          <p>
+            Email: <code>{createdAccount.email}</code>
+          </p>
+
+          <p>
+            Password: <code>{createdAccount.password}</code>
+          </p>
+
+          <button
+            className="text-button"
+            onClick={() => setCreatedAccount(null)}
+            type="button"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {canManage && (
         <form className="employee-form-card" onSubmit={submitForm}>

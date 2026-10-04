@@ -14,10 +14,14 @@ dist-ssr
 
 # Local environment files. Listed here as well as in the repo root ignore so
 # this directory is safe on its own.
+#
+# `.env.production` is deliberately NOT tracked. It used to be committed with a
+# hardcoded production API URL baked in, which meant the deployed frontend could
+# never be pointed at a different backend without a code change. Set
+# VITE_API_URL in the Vercel project environment instead.
 .env
 .env.*
 !.env.example
-!.env.production
 
 # Editor directories and files
 .vscode/*
