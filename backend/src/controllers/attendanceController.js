@@ -451,14 +451,14 @@ const markAttendance = async (req, res) => {
     const checkInDate = parseIstTime(checkIn);
     const checkOutDate = parseIstTime(checkOut);
 
-    if (checkIn && Number.isNaN(checkInDate.getTime())) {
+    if (checkIn && !checkInDate) {
       return res.status(400).json({
         success: false,
         message: "Check-in time must be in HH:mm format",
       });
     }
 
-    if (checkOut && Number.isNaN(checkOutDate.getTime())) {
+    if (checkOut && !checkOutDate) {
       return res.status(400).json({
         success: false,
         message: "Check-out time must be in HH:mm format",
