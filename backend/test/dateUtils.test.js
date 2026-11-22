@@ -5,6 +5,9 @@ const {
   countOverlappingISTDays,
   getDaysInMonth,
   getISTDateString,
+  getISTDateTime,
+  getLateAfterISTHour,
+  parseISTDate,
   getISTDayIndex,
   getISTMonthBounds,
   isValidMonth,
@@ -210,4 +213,33 @@ test("countOverlappingISTDays counts a single day leave as one", () => {
   );
 
   assert.equal(count, 1);
+});
+
+
+test("parseISTDate rejects impossible and malformed calendar dates", () => {
+  assert.equal(getISTDateString(parseISTDate("2026-02-28")), "2026-02-28");
+  assert.equal(getISTDateString(parseISTDate("2024-02-29")), "2024-02-29");
+  assert.equal(parseISTDate("2026-02-31"), null);
+  assert.equal(parseISTDate("2026-13-01"), null);
+  assert.equal(parseISTDate("2026-2-01"), null);
+  assert.equal(parseISTDate("not-a-date"), null);
+  assert.equal(parseISTDate(null), null);
+});
+
+test("getISTDateTime accepts valid 24-hour times and rejects overflow", () => {
+  assert.equal(getISTDateTime("2026-09-01", "09:05").toISOString(), "2026-09-01T03:35:00.000Z");
+  assert.equal(getISTDateTime("2026-09-01", "23:59").toISOString(), "2026-09-01T18:29:00.000Z");
+  assert.equal(getISTDateTime("2026-02-31", "09:00"), null);
+  assert.equal(getISTDateTime("2026-09-01", "24:00"), null);
+  assert.equal(getISTDateTime("2026-09-01", "09:60"), null);
+  assert.equal(getISTDateTime("2026-09-01", "9:00"), null);
+});
+
+test("late check-in threshold defaults to the documented 9 AM IST", () => {
+  assert.equal(getLateAfterISTHour(undefined), 9);
+  assert.equal(getLateAfterISTHour(""), 9);
+  assert.equal(getLateAfterISTHour("8"), 8);
+  assert.equal(getLateAfterISTHour("23"), 23);
+  assert.equal(getLateAfterISTHour("24"), 9);
+  assert.equal(getLateAfterISTHour("not-a-number"), 9);
 });

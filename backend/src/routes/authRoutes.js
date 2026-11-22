@@ -42,7 +42,7 @@ router.post(
   [
     body("name").notEmpty().withMessage("Name is required").trim(),
     body("email").isEmail().withMessage("Valid email address is required").normalizeEmail(),
-    body("password").isLength({ min: 8 }).withMessage("Password must be at least 8 characters long"),
+    body("password").isString().withMessage("Password must be a string").bail().isLength({ min: 8 }).withMessage("Password must be at least 8 characters long"),
     handleValidationErrors,
   ],
   register
@@ -53,7 +53,7 @@ router.post(
   loginLimiter,
   [
     body("email").isEmail().withMessage("Valid email address is required").normalizeEmail(),
-    body("password").notEmpty().withMessage("Password is required"),
+    body("password").isString().withMessage("Password must be a string").bail().notEmpty().withMessage("Password is required"),
     handleValidationErrors,
   ],
   login

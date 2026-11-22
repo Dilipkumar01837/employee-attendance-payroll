@@ -6,6 +6,9 @@ const {
   IST_TIMEZONE,
   getDaysInMonth,
   getISTDateString,
+  getISTDateTime,
+  getLateAfterISTHour,
+  parseISTDate,
   getISTMonthBounds,
   isValidMonth,
   parseMonth,
@@ -18,13 +21,8 @@ const {
 
 // Late threshold in IST. A check-in at or after this hour is Late, before it is
 // Present. Configurable so it can be moved without a code change.
-const lateAfterIstHour = () => {
-  const configured = parseInt(process.env.LATE_AFTER_IST_HOUR, 10);
-
-  return Number.isFinite(configured) && configured >= 0 && configured <= 23
-    ? configured
-    : 10;
-};
+const lateAfterIstHour = () =>
+  getLateAfterISTHour(process.env.LATE_AFTER_IST_HOUR);
 
 const resolveOwnEmployee = async (req, res) => {
   const employee = await resolveEmployeeForUser(
@@ -152,12 +150,30 @@ const checkOut = async (req, res) => {
       });
     }
 
-    attendance.checkOut = now;
-    attendance.totalHours = parseFloat(
+    const totalHours = parseFloat(
       ((now - attendance.checkIn) / (1000 * 60 * 60)).toFixed(2)
     );
 
-    await attendance.save();
+    // Use a conditional atomic update. Two near-simultaneous checkout requests
+    // can both read checkOut=null; only the first update may claim the record.
+    const checkedOut = await Attendance.findOneAndUpdate(
+      {
+        _id: attendance._id,
+        checkOut: null,
+        checkIn: { $lte: now },
+      },
+      {
+        $set: { checkOut: now, totalHours },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!checkedOut) {
+      return res.status(409).json({
+        success: false,
+        message: "Attendance was already checked out. Refresh and try again.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -165,10 +181,10 @@ const checkOut = async (req, res) => {
       data: {
         employeeId: attendance.employeeId,
         date: formatInTimeZone(attendance.date, IST_TIMEZONE, "yyyy-MM-dd"),
-        checkIn: attendance.checkIn,
-        checkOut: attendance.checkOut,
-        totalHours: attendance.totalHours,
-        status: attendance.status,
+        checkIn: checkedOut.checkIn,
+        checkOut: checkedOut.checkOut,
+        totalHours: checkedOut.totalHours,
+        status: checkedOut.status,
       },
     });
   } catch (error) {
@@ -429,9 +445,9 @@ const markAttendance = async (req, res) => {
 
     // Anchored at IST midnight from a plain YYYY-MM-DD value, so the business
     // calendar day can never drift across the UTC boundary.
-    const attendanceDate = new Date(`${date}T00:00:00+05:30`);
+    const attendanceDate = parseISTDate(date);
 
-    if (Number.isNaN(attendanceDate.getTime())) {
+    if (!attendanceDate) {
       return res.status(400).json({
         success: false,
         message: "Date must be a valid calendar date",
@@ -448,19 +464,19 @@ const markAttendance = async (req, res) => {
     }
 
     const parseIstTime = (value) =>
-      value ? new Date(`${date}T${value}:00+05:30`) : null;
+      value ? getISTDateTime(date, value) : null;
 
     const checkInDate = parseIstTime(checkIn);
     const checkOutDate = parseIstTime(checkOut);
 
-    if (checkIn && Number.isNaN(checkInDate.getTime())) {
+    if (checkIn && !checkInDate) {
       return res.status(400).json({
         success: false,
         message: "Check-in time must be in HH:mm format",
       });
     }
 
-    if (checkOut && Number.isNaN(checkOutDate.getTime())) {
+    if (checkOut && !checkOutDate) {
       return res.status(400).json({
         success: false,
         message: "Check-out time must be in HH:mm format",

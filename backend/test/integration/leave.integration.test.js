@@ -190,6 +190,45 @@ test("HR/Admin can reject leave and audit fields decidedBy & decidedAt are persi
   assert.ok(dbLeave.decidedAt instanceof Date);
 });
 
+test("concurrent approve and reject requests can decide a pending leave only once", async () => {
+  await createLinkedUser({
+    employeeId: "EMP001",
+    email: "employee@example.com",
+    role: "employee",
+  });
+  await createUser({ email: "hr1@example.com", role: "hr" });
+  await createUser({ email: "admin1@example.com", role: "admin" });
+
+  const employee = createClient();
+  await loginAs(employee, "employee@example.com");
+  const applied = await employee.post("/api/leaves", {
+    leaveType: "Casual",
+    startDate: futureDate(8),
+    endDate: futureDate(9),
+    reason: "Family event",
+  });
+  assert.equal(applied.status, 201);
+
+  const hr = createClient();
+  const admin = createClient();
+  await loginAs(hr, "hr1@example.com");
+  await loginAs(admin, "admin1@example.com");
+
+  const leaveId = applied.body.data._id;
+  const results = await Promise.all([
+    hr.put(`/api/leaves/${leaveId}/approve`, { remarks: "Approved" }),
+    admin.put(`/api/leaves/${leaveId}/reject`, { remarks: "Rejected" }),
+  ]);
+
+  assert.equal(results.filter((result) => result.status === 200).length, 1);
+  assert.equal(results.filter((result) => result.status === 409).length, 1);
+
+  const stored = await Leave.findById(leaveId);
+  assert.ok(["Approved", "Rejected"].includes(stored.status));
+  assert.ok(stored.decidedBy);
+  assert.ok(stored.decidedAt instanceof Date);
+});
+
 test("employee cannot approve or reject leave requests", async () => {
   await createLinkedUser({
     employeeId: "EMP001",

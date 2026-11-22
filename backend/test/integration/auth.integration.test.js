@@ -64,6 +64,33 @@ test("registration creates an account with a linked, inactive employee record", 
   assert.equal(employee.employmentStatus, "inactive");
 });
 
+
+
+test("registration and login reject non-string passwords as bad requests", async () => {
+  const client = createClient();
+
+  const registration = await client.post("/api/auth/register", {
+    name: "Numeric Password",
+    email: "numeric-password@example.com",
+    password: 12345678,
+  });
+
+  assert.equal(registration.status, 400);
+  assert.match(registration.body.message, /password must be a string/i);
+  assert.equal(
+    await User.countDocuments({ email: "numeric-password@example.com" }),
+    0
+  );
+
+  const login = await client.post("/api/auth/login", {
+    email: "numeric-password@example.com",
+    password: 12345678,
+  });
+
+  assert.equal(login.status, 400);
+  assert.match(login.body.message, /password must be a string/i);
+});
+
 test("registration rejects a password shorter than 8 characters", async () => {
   const client = createClient();
 

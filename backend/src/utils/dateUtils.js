@@ -7,6 +7,41 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const getISTDateString = (date = new Date()) =>
   formatInTimeZone(date, IST_TIMEZONE, "yyyy-MM-dd");
 
+// Parse a calendar date without allowing JavaScript to silently roll invalid
+// values such as February 31 into the following month.
+const parseISTDate = (value) => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const parsed = new Date(`${value}T00:00:00+05:30`);
+  return Number.isNaN(parsed.getTime()) || getISTDateString(parsed) !== value
+    ? null
+    : parsed;
+};
+
+// Parse a 24-hour clock time on an IST calendar date, rejecting overflow and
+// malformed values rather than relying on permissive Date string parsing.
+const parseISTDateTime = (date, time) => {
+  if (!parseISTDate(date) || typeof time !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    return null;
+  }
+
+  const parsed = new Date(`${date}T${time}:00+05:30`);
+  return Number.isNaN(parsed.getTime()) ||
+    formatInTimeZone(parsed, IST_TIMEZONE, "yyyy-MM-dd'T'HH:mm") !== `${date}T${time}`
+    ? null
+    : parsed;
+};
+
+// Keep the fallback aligned with backend/.env.example (9 AM IST).
+const getLateAfterISTHour = (value) => {
+  const configured = Number.parseInt(value, 10);
+  return Number.isInteger(configured) && configured >= 0 && configured <= 23
+    ? configured
+    : 9;
+};
+
 // Whole-day index of the IST calendar day containing the given instant.
 // Two instants on the same IST day always produce the same index, so
 // differencing indexes counts calendar days without any timezone drift.
@@ -93,6 +128,9 @@ module.exports = {
   countOverlappingISTDays,
   getDaysInMonth,
   getISTDateString,
+  getISTDateTime: parseISTDateTime,
+  getLateAfterISTHour,
+  parseISTDate,
   getISTDayIndex,
   getISTDayIndexesInWindow,
   getISTMonthBounds,
