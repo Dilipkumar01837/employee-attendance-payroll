@@ -365,6 +365,36 @@ test("the payroll status machine only allows sensible transitions", async () => 
   assert.equal(stillPaid.status, "Paid", "a refused reversal must not change the status");
 });
 
+test("concurrent payroll status transitions cannot both succeed", async () => {
+  const { employee } = await createLinkedUser({
+    employeeId: "EMP001",
+    email: "employee@example.com",
+    salary: 60000,
+  });
+  await createUser({ email: "hr@example.com", role: "hr", name: "HR" });
+
+  const clientA = createClient();
+  const clientB = createClient();
+  await loginAs(clientA, "hr@example.com");
+  await loginAs(clientB, "hr@example.com");
+
+  const created = await clientA.post("/api/payroll", {
+    employee: String(employee._id),
+    payrollMonth: "2026-09",
+  });
+  assert.equal(created.status, 201);
+
+  const path = `/api/payroll/${created.body.data._id}/status`;
+  const results = await Promise.all([
+    clientA.patch(path, { status: "Approved" }),
+    clientB.patch(path, { status: "Approved" }),
+  ]);
+
+  assert.equal(results.filter((result) => result.status === 200).length, 1);
+  assert.equal(results.filter((result) => result.status === 409).length, 1);
+  assert.equal((await Payroll.findById(created.body.data._id)).status, "Approved");
+});
+
 test("reversing a paid payroll needs an admin and a written reason", async () => {
   const { employee } = await createLinkedUser({
     employeeId: "EMP001",

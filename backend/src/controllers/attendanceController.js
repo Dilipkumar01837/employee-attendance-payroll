@@ -150,12 +150,30 @@ const checkOut = async (req, res) => {
       });
     }
 
-    attendance.checkOut = now;
-    attendance.totalHours = parseFloat(
+    const totalHours = parseFloat(
       ((now - attendance.checkIn) / (1000 * 60 * 60)).toFixed(2)
     );
 
-    await attendance.save();
+    // Use a conditional atomic update. Two near-simultaneous checkout requests
+    // can both read checkOut=null; only the first update may claim the record.
+    const checkedOut = await Attendance.findOneAndUpdate(
+      {
+        _id: attendance._id,
+        checkOut: null,
+        checkIn: { $lte: now },
+      },
+      {
+        $set: { checkOut: now, totalHours },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!checkedOut) {
+      return res.status(409).json({
+        success: false,
+        message: "Attendance was already checked out. Refresh and try again.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -163,10 +181,10 @@ const checkOut = async (req, res) => {
       data: {
         employeeId: attendance.employeeId,
         date: formatInTimeZone(attendance.date, IST_TIMEZONE, "yyyy-MM-dd"),
-        checkIn: attendance.checkIn,
-        checkOut: attendance.checkOut,
-        totalHours: attendance.totalHours,
-        status: attendance.status,
+        checkIn: checkedOut.checkIn,
+        checkOut: checkedOut.checkOut,
+        totalHours: checkedOut.totalHours,
+        status: checkedOut.status,
       },
     });
   } catch (error) {

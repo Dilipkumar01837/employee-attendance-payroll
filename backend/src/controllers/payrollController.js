@@ -414,13 +414,35 @@ const updatePayrollStatus = async (req, res) => {
       });
     }
 
-    payroll.status = status;
-    await payroll.save();
+    // Compare-and-set the previous status in MongoDB. Without this atomic
+    // condition, two concurrent requests can both read Generated and both
+    // report success while attempting the same transition.
+    const update = { status };
+    if (payroll.status === "Paid" && status !== "Paid") {
+      update.reversal = {
+        reason: String(reversalReason).trim(),
+        reversedAt: new Date(),
+        reversedBy: req.user.id,
+      };
+    }
+
+    const updatedPayroll = await Payroll.findOneAndUpdate(
+      { _id: payroll._id, status: payroll.status },
+      { $set: update },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedPayroll) {
+      return res.status(409).json({
+        success: false,
+        message: "Payroll status changed in another request. Refresh and try again.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
       message: "Payroll status updated successfully",
-      data: payroll,
+      data: updatedPayroll,
     });
   } catch (err) {
     if (err.name === "CastError") {

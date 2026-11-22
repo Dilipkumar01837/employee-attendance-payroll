@@ -114,6 +114,29 @@ test("check-out requires a check-in first and cannot be repeated", async () => {
   assert.equal(second.status, 400);
 });
 
+test("concurrent check-out requests can only close an attendance record once", async () => {
+  await createLinkedUser({
+    employeeId: "EMP001",
+    email: "employee@example.com",
+  });
+
+  const client = createClient();
+  await loginAs(client, "employee@example.com");
+  assert.equal((await client.post("/api/attendance/checkin")).status, 201);
+
+  const results = await Promise.all([
+    client.post("/api/attendance/checkout"),
+    client.post("/api/attendance/checkout"),
+  ]);
+
+  assert.equal(results.filter((result) => result.status === 200).length, 1);
+  assert.equal(results.filter((result) => [400, 409].includes(result.status)).length, 1);
+
+  const stored = await Attendance.findOne({ employeeId: "EMP001" });
+  assert.ok(stored.checkOut);
+  assert.ok(stored.totalHours >= 0);
+});
+
 test("HR can mark a day Absent even though there is no check-in", async () => {
   // Regression: `checkIn` was `required: true` on the schema, which made an
   // Absent record impossible to store even though the status is in the enum and
