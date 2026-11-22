@@ -253,17 +253,33 @@ const decideLeave = async (req, res, decision) => {
     });
   }
 
-  leave.status = decision === "approve" ? "Approved" : "Rejected";
-  leave.remarks = remarks || "";
-  leave.decidedBy = req.user.id;
-  leave.decidedAt = new Date();
+  // Compare-and-set the Pending state in MongoDB. A prior read alone is not
+  // sufficient: simultaneous approve/reject requests could both save and both
+  // report success. Only one request may transition Pending to a final state.
+  const updatedLeave = await Leave.findOneAndUpdate(
+    { _id: id, status: "Pending" },
+    {
+      $set: {
+        status: decision === "approve" ? "Approved" : "Rejected",
+        remarks: remarks || "",
+        decidedBy: req.user.id,
+        decidedAt: new Date(),
+      },
+    },
+    { new: true, runValidators: true }
+  );
 
-  await leave.save();
+  if (!updatedLeave) {
+    return res.status(409).json({
+      success: false,
+      message: "Leave request was already decided by another request. Refresh and try again.",
+    });
+  }
 
   return res.status(200).json({
     success: true,
     message: `Leave ${decision === "approve" ? "approved" : "rejected"} successfully`,
-    data: leave,
+    data: updatedLeave,
   });
 };
 
