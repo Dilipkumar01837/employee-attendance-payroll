@@ -6,6 +6,9 @@ const {
   IST_TIMEZONE,
   getDaysInMonth,
   getISTDateString,
+  getISTDateTime,
+  getLateAfterISTHour,
+  parseISTDate,
   getISTMonthBounds,
   isValidMonth,
   parseMonth,
@@ -18,13 +21,8 @@ const {
 
 // Late threshold in IST. A check-in at or after this hour is Late, before it is
 // Present. Configurable so it can be moved without a code change.
-const lateAfterIstHour = () => {
-  const configured = parseInt(process.env.LATE_AFTER_IST_HOUR, 10);
-
-  return Number.isFinite(configured) && configured >= 0 && configured <= 23
-    ? configured
-    : 10;
-};
+const lateAfterIstHour = () =>
+  getLateAfterISTHour(process.env.LATE_AFTER_IST_HOUR);
 
 const resolveOwnEmployee = async (req, res) => {
   const employee = await resolveEmployeeForUser(
@@ -429,9 +427,9 @@ const markAttendance = async (req, res) => {
 
     // Anchored at IST midnight from a plain YYYY-MM-DD value, so the business
     // calendar day can never drift across the UTC boundary.
-    const attendanceDate = new Date(`${date}T00:00:00+05:30`);
+    const attendanceDate = parseISTDate(date);
 
-    if (Number.isNaN(attendanceDate.getTime())) {
+    if (!attendanceDate) {
       return res.status(400).json({
         success: false,
         message: "Date must be a valid calendar date",
@@ -448,7 +446,7 @@ const markAttendance = async (req, res) => {
     }
 
     const parseIstTime = (value) =>
-      value ? new Date(`${date}T${value}:00+05:30`) : null;
+      value ? getISTDateTime(date, value) : null;
 
     const checkInDate = parseIstTime(checkIn);
     const checkOutDate = parseIstTime(checkOut);
